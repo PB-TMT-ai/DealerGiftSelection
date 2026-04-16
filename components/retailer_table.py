@@ -21,6 +21,9 @@ def render_filters(retailers: list[dict]) -> dict:
         zones = sorted({r["zone"] for r in retailers if r.get("zone")})
         slabs = sorted({r["eligible_slab"] for r in retailers if r.get("eligible_slab")})
 
+        selected_zones = st.multiselect("Zone", options=zones, key="filter_zones")
+        selected_states = st.multiselect("State", options=states, key="filter_states")
+
         distributor = st.selectbox(
             "Distributor",
             options=["All"] + distributors,
@@ -28,8 +31,6 @@ def render_filters(retailers: list[dict]) -> dict:
             key="filter_distributor",
         )
 
-        selected_states = st.multiselect("State", options=states, key="filter_states")
-        selected_zones = st.multiselect("Zone", options=zones, key="filter_zones")
         selected_slabs = st.multiselect("Eligible Slab", options=slabs, key="filter_slabs")
 
         retailer_search = st.text_input(

@@ -24,15 +24,18 @@ _DEMO_MODE = not os.environ.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL"
 
 _client = None
 
-# Path to source Excel (checked at repo root, then one level up)
-_EXCEL_FILENAME = "Q4 Dealer Scheme_Point Based.xlsx"
+# Path to source Excel — prefer the newer consolidated file
 _EXCEL_PATH: Path | None = None
-for _candidate in [
-    Path(__file__).resolve().parent / _EXCEL_FILENAME,
-    Path(_EXCEL_FILENAME),
+for _candidate_name in [
+    "FY 26 Q4 dealer scheme.xlsx",
+    "Q4 Dealer Scheme_Point Based.xlsx",
 ]:
-    if _candidate.exists():
-        _EXCEL_PATH = _candidate
+    for _dir in [Path(__file__).resolve().parent, Path(".")]:
+        _candidate = _dir / _candidate_name
+        if _candidate.exists():
+            _EXCEL_PATH = _candidate
+            break
+    if _EXCEL_PATH:
         break
 
 
@@ -64,129 +67,133 @@ _demo_selections: list[dict] = []
 _demo_sel_id_counter: int = 0
 
 
-def _normalize_gift_name(name: str) -> str:
-    """Lowercase, strip whitespace and punctuation for fuzzy gift matching."""
-    return re.sub(r"[^a-z0-9 ]", "", name.lower()).strip()
+_SLAB_THRESHOLDS: list[tuple[int, str]] = [
+    (7500, "E"),
+    (6800, "D"),
+    (4200, "C"),
+    (3000, "B"),
+    (750, "A"),
+]
 
 
-def _load_from_excel() -> tuple[list[dict], list[dict], list[dict]]:
+def _compute_slab(earned_points: int) -> str | None:
+    """Derive the eligible slab from earned points based on catalog thresholds."""
+    for threshold, slab in _SLAB_THRESHOLDS:
+        if earned_points >= threshold:
+            return slab
+    return None
+
+
+def _load_from_excel() -> list[dict]:
     """
-    Load catalog, retailers, and initial selections from the source Excel.
+    Load retailers from the source Excel file.
 
-    Returns (catalog, retailers, initial_selections).
+    Supports two formats:
+      - New format (FY 26): Sheet1 with header on row 3, 8 columns
+      - Old format (Q4): Data sheet with header on row 1, 28 columns
+
+    Returns list of retailer dicts.
     """
     import pandas as pd
 
-    catalog: list[dict] = []
-    retailers: list[dict] = []
-    initial_selections: list[dict] = []
-
     if _EXCEL_PATH is None:
-        return catalog, retailers, initial_selections
+        return []
 
-    # --- Gift catalog from Sheet2 ---
-    df_cat = pd.read_excel(_EXCEL_PATH, sheet_name="Sheet2")
-    # Columns: Points | Gift value (INR) | New Gift | Slab
-    gift_id = 0
-    for _, row in df_cat.iterrows():
-        name = str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else ""
-        if not name or name.lower() == "nan":
-            continue
-        gift_id += 1
-        pts = int(row.iloc[0]) if pd.notna(row.iloc[0]) else None
-        val = int(row.iloc[1]) if pd.notna(row.iloc[1]) else None
-        slab = str(row.iloc[3]).strip() if pd.notna(row.iloc[3]) else None
-        is_flex = name.lower().startswith("amazon")
-        catalog.append({
-            "id": gift_id,
-            "name": name,
-            "slab": slab if slab and slab.lower() != "nan" else None,
-            "points_required": None if is_flex else pts,
-            "gift_value_inr": None if is_flex else val,
-            "is_flexible": is_flex,
-        })
-
-    # Ensure Amazon Voucher is present (Sheet2 last row has it without points)
-    has_voucher = any(g["is_flexible"] for g in catalog)
-    if not has_voucher:
-        gift_id += 1
-        catalog.append({
-            "id": gift_id,
-            "name": "Amazon Voucher",
-            "slab": None,
-            "points_required": None,
-            "gift_value_inr": None,
-            "is_flexible": True,
-        })
-
-    # Build normalized name -> catalog entry lookup for current gift matching
-    cat_by_norm: dict[str, dict] = {}
-    for g in catalog:
-        cat_by_norm[_normalize_gift_name(g["name"])] = g
-
-    # --- Retailers from Data sheet ---
-    df_data = pd.read_excel(_EXCEL_PATH, sheet_name="Data")
+    retailers: list[dict] = []
     seen_sf_ids: set[str] = set()
 
-    sel_id = 0
-    for _, row in df_data.iterrows():
-        sf_id = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
-        if not sf_id or sf_id.lower() == "nan":
-            continue
-        if sf_id in seen_sf_ids:
-            continue  # skip duplicate SF IDs
-        seen_sf_ids.add(sf_id)
+    # Detect file format by sheet names
+    xl = pd.ExcelFile(_EXCEL_PATH)
+    sheet_names = xl.sheet_names
 
-        earned = float(row.iloc[8]) if pd.notna(row.iloc[8]) else 0
-        earned = int(round(earned))  # round to nearest int for clean math
+    if "Sheet1" in sheet_names and "Data" not in sheet_names:
+        # --- New format: FY 26 Q4 dealer scheme.xlsx ---
+        # Header on row 3 (0-indexed: skiprows=2)
+        # Cols: SF Id | Retailer Name | Distributor Name | State Name |
+        #       Distributor self-counter | Zone | Q4 Vol | Points
+        df = pd.read_excel(_EXCEL_PATH, sheet_name="Sheet1", skiprows=2)
 
-        q4_vol = float(row.iloc[7]) if pd.notna(row.iloc[7]) else None
+        for _, row in df.iterrows():
+            sf_id = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
+            if not sf_id or sf_id.lower() == "nan":
+                continue
+            if sf_id in seen_sf_ids:
+                continue
+            seen_sf_ids.add(sf_id)
 
-        # Normalize state name: title case, skip invalid values
-        raw_state = str(row.iloc[3]).strip() if pd.notna(row.iloc[3]) else None
-        if raw_state and raw_state not in ("0", "nan"):
-            state_name = raw_state.title()
-        else:
-            state_name = None
+            # Parse points — handle bad values like " -   "
+            raw_pts = row.iloc[7]
+            try:
+                earned = int(round(float(raw_pts))) if pd.notna(raw_pts) else 0
+            except (ValueError, TypeError):
+                earned = 0
 
-        retailers.append({
-            "sf_id": sf_id,
-            "retailer_name": str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else "",
-            "distributor_name": str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else "",
-            "state_name": state_name,
-            "district_name": str(row.iloc[4]).strip() if pd.notna(row.iloc[4]) else None,
-            "distributor_self_counter": str(row.iloc[5]).strip() if pd.notna(row.iloc[5]) else None,
-            "zone": str(row.iloc[6]).strip() if pd.notna(row.iloc[6]) else None,
-            "q4_volume": q4_vol,
-            "earned_points": earned,
-            "eligible_slab": str(row.iloc[26]).strip() if pd.notna(row.iloc[26]) else None,
-            "max_eligible_gift": str(row.iloc[27]).strip() if pd.notna(row.iloc[27]) else None,
-        })
+            raw_state = str(row.iloc[3]).strip() if pd.notna(row.iloc[3]) else None
+            if raw_state and raw_state not in ("0", "nan", "#N/A", "#n/a"):
+                state_name = raw_state.title()
+            else:
+                state_name = None
 
-        # --- Pre-load "Current gift" selection ---
-        current_gift_name = str(row.iloc[11]).strip() if pd.notna(row.iloc[11]) else ""
-        if current_gift_name and current_gift_name.lower() != "nan":
-            norm = _normalize_gift_name(current_gift_name)
-            matched_gift = cat_by_norm.get(norm)
-            # Fuzzy fallback: partial match
-            if matched_gift is None:
-                for cat_norm, cat_entry in cat_by_norm.items():
-                    if norm in cat_norm or cat_norm in norm:
-                        matched_gift = cat_entry
-                        break
-            if matched_gift is not None:
-                sel_id += 1
-                initial_selections.append({
-                    "id": sel_id,
-                    "retailer_sf_id": sf_id,
-                    "gift_id": matched_gift["id"],
-                    "points_used": matched_gift["points_required"] or 0,
-                    "quantity": 1,
-                    "selected_by": "import",
-                    "notes": "Imported from Excel - Current gift",
-                })
+            q4_vol = None
+            try:
+                q4_vol = float(row.iloc[6]) if pd.notna(row.iloc[6]) else None
+            except (ValueError, TypeError):
+                pass
 
-    return catalog, retailers, initial_selections
+            slab = _compute_slab(earned)
+
+            retailers.append({
+                "sf_id": sf_id,
+                "retailer_name": str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else "",
+                "distributor_name": str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else "",
+                "state_name": state_name,
+                "district_name": None,
+                "distributor_self_counter": str(row.iloc[4]).strip() if pd.notna(row.iloc[4]) else None,
+                "zone": str(row.iloc[5]).strip() if pd.notna(row.iloc[5]) else None,
+                "q4_volume": q4_vol,
+                "earned_points": earned,
+                "eligible_slab": slab,
+                "max_eligible_gift": None,
+            })
+
+    elif "Data" in sheet_names:
+        # --- Old format: Q4 Dealer Scheme_Point Based.xlsx ---
+        df = pd.read_excel(_EXCEL_PATH, sheet_name="Data")
+
+        for _, row in df.iterrows():
+            sf_id = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
+            if not sf_id or sf_id.lower() == "nan":
+                continue
+            if sf_id in seen_sf_ids:
+                continue
+            seen_sf_ids.add(sf_id)
+
+            earned = float(row.iloc[8]) if pd.notna(row.iloc[8]) else 0
+            earned = int(round(earned))
+
+            q4_vol = float(row.iloc[7]) if pd.notna(row.iloc[7]) else None
+
+            raw_state = str(row.iloc[3]).strip() if pd.notna(row.iloc[3]) else None
+            if raw_state and raw_state not in ("0", "nan"):
+                state_name = raw_state.title()
+            else:
+                state_name = None
+
+            retailers.append({
+                "sf_id": sf_id,
+                "retailer_name": str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else "",
+                "distributor_name": str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else "",
+                "state_name": state_name,
+                "district_name": str(row.iloc[4]).strip() if pd.notna(row.iloc[4]) else None,
+                "distributor_self_counter": str(row.iloc[5]).strip() if pd.notna(row.iloc[5]) else None,
+                "zone": str(row.iloc[6]).strip() if pd.notna(row.iloc[6]) else None,
+                "q4_volume": q4_vol,
+                "earned_points": earned,
+                "eligible_slab": str(row.iloc[26]).strip() if pd.notna(row.iloc[26]) else None,
+                "max_eligible_gift": str(row.iloc[27]).strip() if pd.notna(row.iloc[27]) else None,
+            })
+
+    return retailers
 
 
 # --- Hardcoded fallback (used when Excel file is not available) ---
@@ -215,15 +222,10 @@ _FALLBACK_RETAILERS: list[dict] = [
 
 # --- Load demo data (Excel if available, else fallback) ---
 
-_excel_catalog, _excel_retailers, _excel_selections = _load_from_excel()
+_excel_retailers = _load_from_excel()
 
-if _excel_catalog and _excel_retailers:
-    _DEMO_CATALOG: list[dict] = _excel_catalog
-    _DEMO_RETAILERS: list[dict] = _excel_retailers
-    # Start with no selections — users make fresh picks
-else:
-    _DEMO_CATALOG = _FALLBACK_CATALOG
-    _DEMO_RETAILERS = _FALLBACK_RETAILERS
+_DEMO_CATALOG: list[dict] = _FALLBACK_CATALOG
+_DEMO_RETAILERS: list[dict] = _excel_retailers if _excel_retailers else _FALLBACK_RETAILERS
 
 
 def _catalog_by_id() -> dict[int, dict]:

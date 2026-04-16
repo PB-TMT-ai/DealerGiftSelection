@@ -1,49 +1,65 @@
-# Frontend Design Skill
-
-## Typography
-
-- Use Inter or fitting Google Font, never system default
-- Sizes: 14px body, 16px emphasis, 24-32px headings
-- Line height: 1.5 body, 1.2 headings
-- font-medium (500) for emphasis
-
-## Color
-
-- NEVER use #0000ff blue or #800080 purple
-- 1 primary, 1 secondary, 1 accent color
-- Grays: slate-50, slate-100, slate-800, slate-900
-- Hover: darken 10%, same hue
-
-## Spacing
-
-- Scale: 4, 8, 12, 16, 24, 32, 48, 64
-- Cards: p-6
-- Between sections: gap-8 or gap-12
-- Related items: gap-4
-- No arbitrary values (p-7, gap-5)
+# Streamlit UI Design Skill
 
 ## Layout
 
-- Max width: 1280px (max-w-7xl)
-- Grid for layouts, Flex for alignment
-- Cards: shadow-sm or shadow-md
-- Corners: rounded-lg cards, rounded-md buttons
+- Always use `st.set_page_config(layout="wide")` in the entry point
+- Use `st.columns()` for side-by-side content
+- Use `st.container(border=True)` for card-like sections
+- Use `st.expander()` for collapsible detail panels
+- Use `st.sidebar` for filters and navigation
+
+## Typography & Display
+
+- `st.markdown("## Heading")` for page titles
+- `st.caption()` for secondary/helper text
+- `st.metric()` for KPI values with labels
+- `st.divider()` to separate sections
+
+## Data Display
+
+- `st.dataframe()` for interactive tables (sortable, searchable)
+- `st.data_editor()` only when inline editing is needed
+- Always set `use_container_width=True` and `hide_index=True`
+- Use `st.column_config` for custom column formatting
+
+## Forms & Input
+
+- `st.form()` for multi-field submissions (prevents reruns on each input)
+- `st.number_input()` for quantities and numeric values
+- `st.selectbox()` for single-choice dropdowns
+- `st.multiselect()` for multi-choice filters
+- `st.text_input()` for free-text search
+- `st.radio()` with `horizontal=True` for toggle options
+
+## Feedback
+
+- `st.toast()` for success messages
+- `st.error()` for validation failures
+- `st.warning()` for cautionary states
+- `st.info()` for helpful context
+- `st.spinner()` on every data fetch
 
 ## Don'ts
 
-- No gradients unless requested
-- No animations on everything
-- No pure black - use slate-900
-- No low-contrast text
+- No custom CSS unless absolutely essential
+- No `st.write()` for structured content — use specific widgets
+- No hidden states — use disabled states with clear reasons
+- No blocking without feedback — always show spinners
 
 ## Example
 
-```tsx
-<div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-  <h3 className="text-lg font-medium text-slate-900">Title</h3>
-  <p className="mt-2 text-sm text-slate-600">Description</p>
-  <button className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-md transition-colors">
-    Action
-  </button>
-</div>
+```python
+st.markdown("## Dashboard")
+
+cols = st.columns(3)
+with cols[0]:
+    st.metric("Total", f"{total:,}")
+with cols[1]:
+    st.metric("Used", f"{used:,}")
+with cols[2]:
+    st.metric("Utilization", f"{pct:.1f}%")
+
+st.divider()
+
+st.dataframe(df, use_container_width=True, hide_index=True)
 ```

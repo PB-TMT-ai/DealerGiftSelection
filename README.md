@@ -10,7 +10,30 @@ Internal tool for Sales Managers and Territory Managers to help dealer-retailers
 - **Validation:** Pydantic v2
 - **Excel I/O:** openpyxl + pandas
 
-## Setup
+## Quick Start (Demo Mode)
+
+No database setup needed. The app runs with 10 sample retailers in-memory.
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+### Deploy to Streamlit Community Cloud
+
+1. Push code to GitHub
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. New app -> select repo, branch, `app.py`
+4. Deploy (no secrets needed for demo mode)
+
+To connect a live Supabase database, add these secrets in the Streamlit Cloud dashboard:
+
+```
+SUPABASE_URL = "https://your-project.supabase.co"
+SUPABASE_KEY = "your-anon-or-service-key"
+```
+
+## Full Setup (with Supabase)
 
 ### 1. Install dependencies
 
@@ -19,8 +42,6 @@ pip install -r requirements.txt
 ```
 
 ### 2. Configure environment
-
-Copy `.env.example` to `.env` and fill in your Supabase credentials:
 
 ```bash
 cp .env.example .env
@@ -33,7 +54,7 @@ SUPABASE_KEY=your-anon-or-service-key
 
 ### 3. Create database schema
 
-Open the Supabase SQL Editor and run the contents of `supabase/schema.sql`. This creates:
+Open the Supabase SQL Editor and run `supabase/schema.sql`. This creates:
 
 - `gifts_catalog` — 5 physical gifts + Amazon Voucher
 - `retailers` — dealer-retailer master data
@@ -63,11 +84,11 @@ streamlit run app.py
 
 ## Test Accounts
 
-| Name       | PIN  | Role   | Access                        |
-|------------|------|--------|-------------------------------|
+| Name       | PIN  | Role   | Access                           |
+|------------|------|--------|----------------------------------|
 | Admin      | 9999 | admin  | Gift Selection + Admin Dashboard |
-| SM North   | 1111 | sm_tm  | Gift Selection only           |
-| TM Central | 2222 | sm_tm  | Gift Selection only           |
+| SM North   | 1111 | sm_tm  | Gift Selection only              |
+| TM Central | 2222 | sm_tm  | Gift Selection only              |
 
 ## Features
 
@@ -91,12 +112,19 @@ streamlit run app.py
 - Can combine with physical gifts
 - If remaining balance < 250 after physical selections, voucher is unavailable
 
+### Demo Mode
+When `SUPABASE_URL` is not set, the app runs with in-memory sample data:
+- 10 retailers across 4 zones and 9 states
+- Full gift catalog (5 physical + Amazon Voucher)
+- All validation rules enforced identically to live mode
+- Selections persist in memory during the session
+
 ## Project Structure
 
 ```
 app.py                    # Entry point, PIN login
 auth.py                   # PIN verification + lockout
-db.py                     # Supabase client + query helpers
+db.py                     # Supabase client + demo mode
 models.py                 # Pydantic v2 schemas
 pages/
   1_Gift_Selection.py     # SM/TM retailer + gift picker view

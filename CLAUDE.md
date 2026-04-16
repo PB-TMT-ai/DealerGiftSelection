@@ -33,19 +33,31 @@ output, edge cases. Check here FIRST.
 - **Excel I/O:** openpyxl + pandas
 - **Env management:** python-dotenv
 - **Auth:** PIN-based gate (no auth framework)
+- **Deployment:** Streamlit Community Cloud
+- **Demo mode:** In-memory data when SUPABASE_URL is unset
 
 ## Project Structure
 
 ```
 /app.py              - Entry point, PIN login, router
-/auth.py             - PIN verification
-/db.py               - Supabase client + query helpers
+/auth.py             - PIN verification + lockout logic
+/db.py               - Supabase client + query helpers (+ demo mode)
 /models.py           - Pydantic schemas
-/pages/              - Streamlit multipage views
-/components/         - Reusable UI components
-/utils/              - Constants, points logic, Excel export
-/supabase/           - Schema SQL
-/scripts/            - Automation scripts (seeding)
+/pages/
+  1_Gift_Selection.py  - SM/TM retailer + gift picker view
+  2_Consolidated_Admin.py - Admin dashboard + Excel export
+/components/
+  retailer_table.py  - Filterable retailer grid
+  gift_picker.py     - Gift selection UI with live balance math
+  suggestions.py     - Combo suggestion panel
+/utils/
+  constants.py       - Business rule constants (VOUCHER_MIN_POINTS, etc.)
+  points.py          - Suggestion algorithm + validation
+  excel_export.py    - Styled Excel workbook generator
+/supabase/
+  schema.sql         - Full DDL + RPC + indexes + seed data
+/scripts/
+  seed_from_excel.py - Excel -> Supabase seeder (idempotent)
 /blueprints/         - Task SOPs
 /.workspace/         - Temp files (gitignored)
 ```
@@ -58,6 +70,14 @@ output, edge cases. Check here FIRST.
 - Use `async/await` only when necessary (Streamlit is sync)
 - Import business constants from `utils/constants.py` — never hardcode
 - All Supabase queries use parameterized calls (no string interpolation)
+
+## Key Business Rules
+
+- **Voucher minimum:** 250 points (import `VOUCHER_MIN_POINTS` from constants)
+- **Voucher conversion:** 1 point = ₹4 (import `VOUCHER_POINTS_TO_INR` from constants)
+- **Physical gifts:** fixed points from catalog, never recompute
+- **Point validation:** enforced at UI layer AND DB layer (replace_selections RPC)
+- **Atomic save:** delete + insert in single Postgres transaction
 
 ## Error Protocol
 
@@ -75,3 +95,4 @@ output, edge cases. Check here FIRST.
 - Don't write from scratch when blueprint exists
 - Don't hardcode point values or conversion rates — use utils/constants.py
 - Don't expose SUPABASE_SERVICE_KEY to client-side code
+- Don't use `* 4` or `>= 250` directly — import from constants

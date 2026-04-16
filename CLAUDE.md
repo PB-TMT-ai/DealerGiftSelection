@@ -1,4 +1,4 @@
-# Project: DealerGiftSelection
+# Project: DealerGiftSelection — Q4 Dealer Scheme Gift Selection Portal
 
 ## Core Principle
 You operate as the decision-maker in a modular system. Your job is NOT to do everything
@@ -26,27 +26,38 @@ output, edge cases. Check here FIRST.
 
 ## Tech Stack
 
-- **Framework:** React
-- **Language:** TypeScript (strict mode)
-- **Styling:** Tailwind CSS
-- **Backend/Database:** Supabase
+- **Frontend:** Streamlit (latest stable)
+- **Backend/Database:** Supabase (Postgres) via `supabase-py`
+- **Language:** Python 3.11+
+- **Validation:** Pydantic v2
+- **Excel I/O:** openpyxl + pandas
+- **Env management:** python-dotenv
+- **Auth:** PIN-based gate (no auth framework)
 
 ## Project Structure
 
 ```
-/src (components, pages, hooks, lib, types, styles)
-/scripts - Automation scripts
-/blueprints - Task SOPs
-/.workspace - Temp files (gitignored)
+/app.py              - Entry point, PIN login, router
+/auth.py             - PIN verification
+/db.py               - Supabase client + query helpers
+/models.py           - Pydantic schemas
+/pages/              - Streamlit multipage views
+/components/         - Reusable UI components
+/utils/              - Constants, points logic, Excel export
+/supabase/           - Schema SQL
+/scripts/            - Automation scripts (seeding)
+/blueprints/         - Task SOPs
+/.workspace/         - Temp files (gitignored)
 ```
 
 ## Code Standards
 
-- TypeScript strict, explicit return types
-- Functional components only
-- Props: ComponentNameProps
-- No any - use unknown
-- Async/await over .then()
+- Python 3.11+ with type hints on all functions
+- Pydantic v2 for data validation
+- No bare `except:` — always catch specific exceptions
+- Use `async/await` only when necessary (Streamlit is sync)
+- Import business constants from `utils/constants.py` — never hardcode
+- All Supabase queries use parameterized calls (no string interpolation)
 
 ## Error Protocol
 
@@ -62,3 +73,5 @@ output, edge cases. Check here FIRST.
 - Don't ignore errors and retry blindly
 - Don't create files outside structure
 - Don't write from scratch when blueprint exists
+- Don't hardcode point values or conversion rates — use utils/constants.py
+- Don't expose SUPABASE_SERVICE_KEY to client-side code

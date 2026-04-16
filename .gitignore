@@ -1,17 +1,39 @@
 CLAUDE.local.md
 .workspace/
 *.tmp
+
+# Environment
 .env
 .env.local
 .env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Node (legacy scaffold)
 node_modules/
 dist/
 build/
 .next/
 out/
+*.tsbuildinfo
+
+# IDE
 .vscode/
 .idea/
 .DS_Store
+
+# Logs & coverage
 *.log
 coverage/
-*.tsbuildinfo
+
+# Exports
+exports/

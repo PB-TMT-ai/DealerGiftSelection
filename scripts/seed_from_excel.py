@@ -44,15 +44,16 @@ def seed_gift_catalog(client, excel_path: str) -> dict[str, int]:
 
     catalog_map: dict[str, int] = {}
 
+    # Sheet2 columns: Points | Gift value (INR) | New Gift | Slab
     for _, row in df.iterrows():
-        name = str(row.iloc[0]).strip()
+        name = str(row.iloc[2]).strip()
         if not name or name.lower() == "nan":
             continue
 
-        slab = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else None
-        points_required = int(row.iloc[2]) if pd.notna(row.iloc[2]) else None
-        gift_value_inr = int(row.iloc[3]) if pd.notna(row.iloc[3]) else None
-        is_flexible = str(row.iloc[0]).strip().lower().startswith("amazon")
+        points_required = int(row.iloc[0]) if pd.notna(row.iloc[0]) else None
+        gift_value_inr = int(row.iloc[1]) if pd.notna(row.iloc[1]) else None
+        slab = str(row.iloc[3]).strip() if pd.notna(row.iloc[3]) else None
+        is_flexible = name.lower().startswith("amazon")
 
         resp = client.table("gifts_catalog").upsert(
             {

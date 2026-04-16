@@ -30,3 +30,5 @@ coverage/
 # Exports
 exports/
 *.xlsx
+# Allow source data Excel file
+!Q4 Dealer Scheme_Point Based.xlsx

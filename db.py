@@ -220,8 +220,7 @@ _excel_catalog, _excel_retailers, _excel_selections = _load_from_excel()
 if _excel_catalog and _excel_retailers:
     _DEMO_CATALOG: list[dict] = _excel_catalog
     _DEMO_RETAILERS: list[dict] = _excel_retailers
-    _demo_selections = _excel_selections
-    _demo_sel_id_counter = len(_excel_selections)
+    # Start with no selections — users make fresh picks
 else:
     _DEMO_CATALOG = _FALLBACK_CATALOG
     _DEMO_RETAILERS = _FALLBACK_RETAILERS

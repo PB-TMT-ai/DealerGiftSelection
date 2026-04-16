@@ -51,19 +51,29 @@ utilization_pct = (total_used / total_earned * 100) if total_earned > 0 else 0
 with_selections = sum(1 for r in retailers if r.get("points_used", 0) > 0)
 without_selections = total_retailers - with_selections
 
-kpi_cols = st.columns(6)
+# Compute estimated total cost across all selections
+estimated_total_cost = 0
+for r in retailers:
+    for sel in r.get("selections", []):
+        gift_info = sel.get("gifts_catalog", {})
+        if not gift_info:
+            continue
+        qty = sel.get("quantity", 1)
+        pts = sel.get("points_used", 0)
+        if gift_info.get("is_flexible"):
+            estimated_total_cost += pts * VOUCHER_POINTS_TO_INR
+        else:
+            estimated_total_cost += (gift_info.get("gift_value_inr", 0) or 0) * qty
+
+kpi_cols = st.columns(4)
 with kpi_cols[0]:
-    st.metric("Total Retailers", f"{total_retailers:,}")
+    st.metric("Total Dealers", f"{total_retailers:,}")
 with kpi_cols[1]:
-    st.metric("Total Earned Points", f"{total_earned:,}")
-with kpi_cols[2]:
-    st.metric("Points Utilized", f"{total_used:,}")
-with kpi_cols[3]:
-    st.metric("Utilization", f"{utilization_pct:.1f}%")
-with kpi_cols[4]:
     st.metric("With Selections", f"{with_selections:,}")
-with kpi_cols[5]:
-    st.metric("Without Selections", f"{without_selections:,}")
+with kpi_cols[2]:
+    st.metric("Utilization", f"{utilization_pct:.1f}%")
+with kpi_cols[3]:
+    st.metric("Estimated Total Cost", f"₹{estimated_total_cost:,}")
 
 st.divider()
 

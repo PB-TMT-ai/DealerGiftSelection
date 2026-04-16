@@ -24,12 +24,13 @@ _DEMO_MODE = not os.environ.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL"
 
 _client = None
 
-# Path to source Excel — prefer the newer consolidated file
+# Path to source Excel — prefer the newest file
 _EXCEL_PATH: Path | None = None
 for _candidate_name in [
+    "FY 26 Q4 dealer scheme_v1.xlsx",
     "FY 26 Q4 dealer scheme.xlsx",
     "Q4 Dealer Scheme_Point Based.xlsx",
-]:
+]:  # newest first
     for _dir in [Path(__file__).resolve().parent, Path(".")]:
         _candidate = _dir / _candidate_name
         if _candidate.exists():
@@ -88,9 +89,11 @@ def _load_from_excel() -> list[dict]:
     """
     Load retailers from the source Excel file.
 
+    Only retailers with earned points > 0 are included.
+
     Supports two formats:
-      - New format (FY 26): Sheet1 with header on row 3, 8 columns
-      - Old format (Q4): Data sheet with header on row 1, 28 columns
+      - New format (FY 26): Dealer data / Sheet1, header on row 3, 8 columns
+      - Old format (Q4): Data sheet, header on row 1, 28 columns
 
     Returns list of retailer dicts.
     """
@@ -106,20 +109,18 @@ def _load_from_excel() -> list[dict]:
     xl = pd.ExcelFile(_EXCEL_PATH)
     sheet_names = xl.sheet_names
 
-    if "Sheet1" in sheet_names and "Data" not in sheet_names:
-        # --- New format: FY 26 Q4 dealer scheme.xlsx ---
+    if "Data" not in sheet_names:
+        # --- New format: FY 26 Q4 dealer scheme ---
         # Header on row 3 (0-indexed: skiprows=2)
         # Cols: SF Id | Retailer Name | Distributor Name | State Name |
         #       Distributor self-counter | Zone | Q4 Vol | Points
-        df = pd.read_excel(_EXCEL_PATH, sheet_name="Sheet1", skiprows=2)
+        data_sheet = "Dealer data" if "Dealer data" in sheet_names else sheet_names[0]
+        df = pd.read_excel(_EXCEL_PATH, sheet_name=data_sheet, skiprows=2)
 
         for _, row in df.iterrows():
             sf_id = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
             if not sf_id or sf_id.lower() == "nan":
                 continue
-            if sf_id in seen_sf_ids:
-                continue
-            seen_sf_ids.add(sf_id)
 
             # Parse points — handle bad values like " -   "
             raw_pts = row.iloc[7]
@@ -127,6 +128,13 @@ def _load_from_excel() -> list[dict]:
                 earned = int(round(float(raw_pts))) if pd.notna(raw_pts) else 0
             except (ValueError, TypeError):
                 earned = 0
+
+            if earned <= 0:
+                continue  # only show dealers who have earned points
+
+            if sf_id in seen_sf_ids:
+                continue
+            seen_sf_ids.add(sf_id)
 
             raw_state = str(row.iloc[3]).strip() if pd.notna(row.iloc[3]) else None
             if raw_state and raw_state not in ("0", "nan", "#N/A", "#n/a"):
@@ -164,12 +172,16 @@ def _load_from_excel() -> list[dict]:
             sf_id = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
             if not sf_id or sf_id.lower() == "nan":
                 continue
-            if sf_id in seen_sf_ids:
-                continue
-            seen_sf_ids.add(sf_id)
 
             earned = float(row.iloc[8]) if pd.notna(row.iloc[8]) else 0
             earned = int(round(earned))
+
+            if earned <= 0:
+                continue
+
+            if sf_id in seen_sf_ids:
+                continue
+            seen_sf_ids.add(sf_id)
 
             q4_vol = float(row.iloc[7]) if pd.notna(row.iloc[7]) else None
 

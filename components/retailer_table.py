@@ -19,7 +19,6 @@ def render_filters(retailers: list[dict]) -> dict:
         distributors = sorted({r["distributor_name"] for r in retailers if r.get("distributor_name")})
         states = sorted({r["state_name"] for r in retailers if r.get("state_name")})
         zones = sorted({r["zone"] for r in retailers if r.get("zone")})
-        slabs = sorted({r["eligible_slab"] for r in retailers if r.get("eligible_slab")})
 
         selected_zones = st.multiselect("Zone", options=zones, key="filter_zones")
         selected_states = st.multiselect("State", options=states, key="filter_states")
@@ -30,8 +29,6 @@ def render_filters(retailers: list[dict]) -> dict:
             index=0,
             key="filter_distributor",
         )
-
-        selected_slabs = st.multiselect("Eligible Slab", options=slabs, key="filter_slabs")
 
         retailer_search = st.text_input(
             "Search retailer name",
@@ -51,7 +48,6 @@ def render_filters(retailers: list[dict]) -> dict:
         "distributor": distributor if distributor != "All" else None,
         "states": selected_states or None,
         "zones": selected_zones or None,
-        "slabs": selected_slabs or None,
         "retailer_search": retailer_search.strip() or None,
         "has_selections": {"All": None, "Yes": True, "No": False}[has_selections],
     }
@@ -76,8 +72,6 @@ def apply_filters(
         if filters["states"] and r.get("state_name") not in filters["states"]:
             continue
         if filters["zones"] and r.get("zone") not in filters["zones"]:
-            continue
-        if filters["slabs"] and r.get("eligible_slab") not in filters["slabs"]:
             continue
         if filters["retailer_search"]:
             if filters["retailer_search"].lower() not in r.get("retailer_name", "").lower():
@@ -147,7 +141,6 @@ def render_retailer_table(
             "Distributor": r.get("distributor_name", ""),
             "State": r.get("state_name", ""),
             "Zone": r.get("zone", ""),
-            "Slab": r.get("eligible_slab", ""),
             "Earned Points": earned,
             "Points Used": used,
             "Balance": balance,

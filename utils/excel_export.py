@@ -105,15 +105,13 @@ def build_consolidated_rows(retailers: list[dict]) -> list[dict]:
             "Retailer Name": r.get("retailer_name", ""),
             "Distributor": r.get("distributor_name", ""),
             "State": r.get("state_name", ""),
-            "District": r.get("district_name", ""),
             "Zone": r.get("zone", ""),
-            "Slab": r.get("eligible_slab", ""),
             "Earned Points": earned,
             "Points Used": used,
             "Balance": balance,
             "Utilization %": round(used / earned * 100, 1) if earned > 0 else 0,
             "Gift Selections": ", ".join(gift_parts) if gift_parts else "—",
-            "Total Value (₹)": total_value_inr,
+            "Estimated Cost (₹)": total_value_inr,
         })
 
     return rows
@@ -132,7 +130,7 @@ def build_zone_summary(retailers: list[dict]) -> pd.DataFrame:
                 "Retailers With Selections": 0,
                 "Total Earned Points": 0,
                 "Total Points Used": 0,
-                "Total Value (₹)": 0,
+                "Estimated Cost (₹)": 0,
             }
 
         z = zone_data[zone]
@@ -150,9 +148,9 @@ def build_zone_summary(retailers: list[dict]) -> pd.DataFrame:
             pts = sel.get("points_used", 0)
             qty = sel.get("quantity", 1)
             if gift_info.get("is_flexible"):
-                z["Total Value (₹)"] += pts * VOUCHER_POINTS_TO_INR
+                z["Estimated Cost (₹)"] += pts * VOUCHER_POINTS_TO_INR
             else:
-                z["Total Value (₹)"] += (gift_info.get("gift_value_inr", 0) or 0) * qty
+                z["Estimated Cost (₹)"] += (gift_info.get("gift_value_inr", 0) or 0) * qty
 
     df = pd.DataFrame(list(zone_data.values()))
     if not df.empty:
@@ -190,7 +188,7 @@ def build_state_summary(retailers: list[dict]) -> pd.DataFrame:
 
 
 def build_gift_summary(retailers: list[dict]) -> pd.DataFrame:
-    """Aggregate by gift type."""
+    """Aggregate by gift type with estimated costing."""
     gift_data: dict[str, dict] = {}
 
     for r in retailers:
@@ -202,22 +200,29 @@ def build_gift_summary(retailers: list[dict]) -> pd.DataFrame:
             name = gift_info.get("name", "Unknown")
             qty = sel.get("quantity", 1)
             pts = sel.get("points_used", 0)
+            is_voucher = gift_info.get("is_flexible", False)
 
             if name not in gift_data:
                 gift_data[name] = {
                     "Gift": name,
-                    "Units Selected": 0,
+                    "# Selected": 0,
                     "Total Points": 0,
-                    "Total Value (₹)": 0,
+                    "Estimated Cost (₹)": 0,
+                    "_is_voucher": is_voucher,
                 }
 
             g = gift_data[name]
-            g["Units Selected"] += qty
             g["Total Points"] += pts * qty
 
-            if gift_info.get("is_flexible"):
-                g["Total Value (₹)"] += pts * VOUCHER_POINTS_TO_INR
+            if is_voucher:
+                g["# Selected"] += pts  # for voucher, # = total points selected
+                g["Estimated Cost (₹)"] += pts * VOUCHER_POINTS_TO_INR
             else:
-                g["Total Value (₹)"] += (gift_info.get("gift_value_inr", 0) or 0) * qty
+                g["# Selected"] += qty
+                g["Estimated Cost (₹)"] += (gift_info.get("gift_value_inr", 0) or 0) * qty
 
-    return pd.DataFrame(list(gift_data.values()))
+    rows = list(gift_data.values())
+    for row in rows:
+        row.pop("_is_voucher", None)
+
+    return pd.DataFrame(rows)

@@ -59,8 +59,7 @@ def get_client():
 
 _DEMO_USERS: list[dict] = [
     {"id": 1, "name": "Admin", "pin": "9999", "role": "admin"},
-    {"id": 2, "name": "SM North", "pin": "1111", "role": "sm_tm"},
-    {"id": 3, "name": "TM Central", "pin": "2222", "role": "sm_tm"},
+    {"id": 2, "name": "Sales Team", "pin": "1111", "role": "sm_tm"},
 ]
 
 # Mutable in-memory store for demo gift selections

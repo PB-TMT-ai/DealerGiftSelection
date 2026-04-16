@@ -160,6 +160,5 @@ ON CONFLICT (name) DO UPDATE SET
 -- Default app users
 INSERT INTO app_users (name, pin, role) VALUES
   ('Admin',      '9999', 'admin'),
-  ('SM North',   '1111', 'sm_tm'),
-  ('TM Central', '2222', 'sm_tm')
+  ('Sales Team', '1111', 'sm_tm')
 ON CONFLICT DO NOTHING;

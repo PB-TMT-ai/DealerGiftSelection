@@ -87,8 +87,7 @@ streamlit run app.py
 | Name       | PIN  | Role   | Access                           |
 |------------|------|--------|----------------------------------|
 | Admin      | 9999 | admin  | Gift Selection + Admin Dashboard |
-| SM North   | 1111 | sm_tm  | Gift Selection only              |
-| TM Central | 2222 | sm_tm  | Gift Selection only              |
+| Sales Team | 1111 | sm_tm  | Gift Selection only              |
 
 ## Features
 

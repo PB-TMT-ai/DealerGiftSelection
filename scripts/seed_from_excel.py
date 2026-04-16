@@ -236,8 +236,7 @@ def seed_app_users(client) -> None:
     """Seed default app users. Idempotent via ON CONFLICT."""
     users = [
         {"name": "Admin", "pin": "9999", "role": "admin"},
-        {"name": "SM North", "pin": "1111", "role": "sm_tm"},
-        {"name": "TM Central", "pin": "2222", "role": "sm_tm"},
+        {"name": "Sales Team", "pin": "1111", "role": "sm_tm"},
     ]
     for user in users:
         client.table("app_users").upsert(user, on_conflict="pin").execute()

@@ -22,7 +22,7 @@ selections = [{"gift_id": 1, "points_used": 750, "quantity": 1}]
 client.rpc("replace_selections", {
     "p_retailer": "SF001",
     "p_selections": json.dumps(selections),
-    "p_user": "SM North"
+    "p_user": "Sales Team"
 }).execute()
 ```
 

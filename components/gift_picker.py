@@ -56,50 +56,50 @@ def _render_gift_picker_body(
     live_total = live_physical + live_voucher
     live_remaining = earned - live_total
 
-    # Fixed bottom balance bar — always visible regardless of scroll.
-    # CSS sticky doesn't work in Streamlit due to overflow:hidden on ancestor divs.
+    # Sticky balance bar at the top of the dialog's scroll viewport.
+    # Streamlit nests dialog content in stVerticalBlocks with clipped overflow,
+    # which breaks CSS sticky — the override below forces overflow:visible on
+    # those ancestors, strictly scoped inside the dialog.
     utilization = (live_total / earned * 100) if earned > 0 else 0
     remaining_color = "#ff4b4b" if live_remaining < 0 else "#31c48d"
 
     st.markdown(
         f"""
         <style>
-        .balance-bar {{
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 99999;
+        div[data-testid="stDialog"] div[role="dialog"] [data-testid="stVerticalBlock"] {{
+            overflow: visible !important;
+        }}
+        .balance-bar-sticky {{
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            margin: 0 -1rem 0.5rem -1rem;
+            padding: 0.6rem 1rem;
             background: rgba(255, 255, 255, 0.97);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.12);
-            padding: 0.6rem 1rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
             display: flex;
             justify-content: space-around;
             gap: 0.5rem;
         }}
-        .balance-bar .bm {{
-            text-align: center;
-        }}
-        .balance-bar .bm .bl {{
+        .balance-bar-sticky .bm {{ text-align: center; }}
+        .balance-bar-sticky .bm .bl {{
             display: block;
             font-size: 0.65rem;
             color: #808080;
             text-transform: uppercase;
         }}
-        .balance-bar .bm .bv {{
+        .balance-bar-sticky .bm .bv {{
             display: block;
             font-size: 1.1rem;
             font-weight: 700;
         }}
         @media (prefers-color-scheme: dark) {{
-            .balance-bar {{
-                background: rgba(14, 17, 23, 0.97);
-            }}
+            .balance-bar-sticky {{ background: rgba(14, 17, 23, 0.97); }}
         }}
         </style>
-        <div class="balance-bar">
+        <div class="balance-bar-sticky">
             <div class="bm"><span class="bl">Earned</span><span class="bv">{earned:,}</span></div>
             <div class="bm"><span class="bl">Redeeming</span><span class="bv">{live_total:,}</span></div>
             <div class="bm"><span class="bl">Remaining</span><span class="bv" style="color:{remaining_color}">{live_remaining:,}</span></div>
@@ -267,9 +267,6 @@ def _render_gift_picker_body(
 
     if not can_save and len(selections) == 0:
         st.caption("Select at least one gift to save.")
-
-    # Spacer so content isn't hidden behind the fixed bottom balance bar
-    st.markdown('<div style="height:70px"></div>', unsafe_allow_html=True)
 
 
 def _read_live_totals(

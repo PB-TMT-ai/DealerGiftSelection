@@ -53,12 +53,10 @@ def render_suggestions(balance: int, catalog: list[dict]) -> None:
                 st.caption(f"  • {part}")
 
             # Totals
-            cols = st.columns(3)
+            cols = st.columns(2)
             with cols[0]:
                 st.caption(f"Points: {combo.total_points:,}")
             with cols[1]:
-                st.caption(f"Value: ₹{combo.total_value_inr:,}")
-            with cols[2]:
                 unused = balance - combo.total_points
                 if unused > 0:
                     st.caption(f"Unused: {unused:,} pts")

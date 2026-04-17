@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from utils.constants import VOUCHER_MIN_POINTS, VOUCHER_POINTS_TO_INR
+from utils.constants import VOUCHER_MIN_POINTS
 from utils.points import suggest_combinations
 
 
@@ -41,8 +41,7 @@ def render_suggestions(balance: int, catalog: list[dict]) -> None:
             parts = []
             for item in combo.items:
                 if item.is_voucher:
-                    inr = item.points_required * VOUCHER_POINTS_TO_INR
-                    parts.append(f"Amazon Voucher: {item.points_required:,} pts (₹{inr:,})")
+                    parts.append(f"Amazon Voucher: {item.points_required:,} pts")
                 else:
                     parts.append(
                         f"{item.quantity}× {item.gift_name}: "

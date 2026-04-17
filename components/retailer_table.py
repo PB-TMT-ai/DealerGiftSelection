@@ -197,9 +197,22 @@ def render_retailer_table(
             use_container_width=True,
             hide_index=True,
             column_config={
+                "SF ID": st.column_config.TextColumn("SF ID", width="small"),
+                "Retailer Name": st.column_config.TextColumn("Retailer Name", width="medium"),
+                "Distributor": st.column_config.TextColumn("Distributor", width="medium"),
+                "State": st.column_config.TextColumn("State", width="small"),
+                "Zone": st.column_config.TextColumn("Zone", width="small"),
+                "Earned Points": st.column_config.NumberColumn("Earned Points", width="small"),
+                "Points Used": st.column_config.NumberColumn("Points Used", width="small"),
                 "Balance": st.column_config.NumberColumn(
                     "Balance",
                     help="Earned points minus points used",
+                    width="small",
+                ),
+                "Current Selections": st.column_config.TextColumn(
+                    "Current Selections",
+                    help="Gifts currently selected for this retailer",
+                    width="large",
                 ),
             },
         )

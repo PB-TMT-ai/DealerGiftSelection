@@ -218,10 +218,6 @@ def seed_retailers(client, excel_path: str) -> int:
         if not sf_id or sf_id.lower() == "nan":
             continue
 
-        earned = row.get(col_map.get("earned_points", ""), 0)
-        if pd.isna(earned):
-            earned = 0
-
         record = {
             "sf_id": sf_id,
             "retailer_name": str(row.get(col_map.get("retailer_name", ""), "")).strip(),
@@ -230,8 +226,8 @@ def seed_retailers(client, excel_path: str) -> int:
             "district_name": _safe_str(row.get(col_map.get("district_name", ""))),
             "zone": _safe_str(row.get(col_map.get("zone", ""))),
             "distributor_self_counter": _safe_str(row.get(col_map.get("distributor_self_counter", ""))),
-            "q4_volume": float(row.get(col_map.get("q4_volume", ""), 0)) if pd.notna(row.get(col_map.get("q4_volume", ""), None)) else None,
-            "earned_points": float(earned),
+            "q4_volume": _safe_float(row.get(col_map.get("q4_volume", ""))),
+            "earned_points": _safe_float(row.get(col_map.get("earned_points", ""))) or 0.0,
             "eligible_slab": _safe_str(row.get(col_map.get("eligible_slab", ""))),
             "max_eligible_gift": _safe_str(row.get(col_map.get("max_eligible_gift", ""))),
         }
@@ -334,6 +330,27 @@ def _safe_str(val) -> str | None:
         return None
     s = str(val).strip()
     return s if s and s.lower() != "nan" else None
+
+
+def _safe_float(val) -> float | None:
+    """
+    Convert a value to float, returning None for NaN / empty / dash
+    placeholders like ``'-'`` or ``'-   '`` that Excel uses for missing
+    numerics.
+    """
+    if val is None:
+        return None
+    if isinstance(val, float) and pd.isna(val):
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip()
+    if not s or s.lower() == "nan" or set(s) <= {"-", " "}:
+        return None
+    try:
+        return float(s.replace(",", ""))
+    except ValueError:
+        return None
 
 
 def main() -> None:

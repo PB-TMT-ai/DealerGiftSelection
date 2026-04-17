@@ -379,7 +379,7 @@ def replace_selections(
         "replace_selections",
         {
             "p_retailer": retailer_sf_id,
-            "p_selections": json.dumps(selections),
+            "p_selections": selections,
             "p_user": user_name,
         },
     ).execute()

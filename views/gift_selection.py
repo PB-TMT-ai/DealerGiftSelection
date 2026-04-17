@@ -1,17 +1,16 @@
-"""Gift Selection view — inline dealer picker + gift picker, mobile-first."""
+"""Gift Selection view — filters-first dealer picker, modal gift picker."""
 
 from __future__ import annotations
 
 import streamlit as st
 
 import db
-from components.gift_picker import render_gift_picker
+from components.gift_picker import open_gift_picker_dialog
 from components.retailer_table import (
     apply_filters,
     render_filters,
     render_retailer_table,
 )
-from components.suggestions import render_suggestions
 
 
 def render_gift_selection() -> None:
@@ -45,14 +44,7 @@ def render_gift_selection() -> None:
             existing_selections = [
                 s for s in all_selections if s["retailer_sf_id"] == selected_sf_id
             ]
-
-            used = points_used_map.get(selected_sf_id, 0)
-            balance = int(retailer["earned_points"]) - used
-
-            with st.expander("Combo Suggestions", expanded=False):
-                render_suggestions(balance, catalog)
-
-            render_gift_picker(
+            open_gift_picker_dialog(
                 retailer=retailer,
                 catalog=catalog,
                 existing_selections=existing_selections,

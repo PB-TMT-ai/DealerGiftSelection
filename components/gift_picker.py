@@ -30,7 +30,7 @@ def _render_gift_picker_body(
     earned = int(retailer["earned_points"])
 
     st.markdown(f"### {retailer['retailer_name']}")
-    st.caption(f"SF ID: {sf_id} · Slab: {retailer.get('eligible_slab', '—')}")
+    st.caption(f"SF ID: {sf_id}")
 
     physical_gifts = [g for g in catalog if not g.get("is_flexible")]
     voucher_gift = next((g for g in catalog if g.get("is_flexible")), None)

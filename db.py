@@ -27,6 +27,7 @@ _client = None
 # Path to source Excel — prefer the newest file
 _EXCEL_PATH: Path | None = None
 for _candidate_name in [
+    "FY 26 Q4 dealer scheme_v2.xlsx",
     "FY 26 Q4 dealer scheme_v1.xlsx",
     "FY 26 Q4 dealer scheme.xlsx",
     "Q4 Dealer Scheme_Point Based.xlsx",

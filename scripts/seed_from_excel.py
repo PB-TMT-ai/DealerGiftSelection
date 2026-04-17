@@ -36,6 +36,48 @@ def normalize_name(name: str) -> str:
     return re.sub(r"[^a-z0-9 ]", "", name.lower()).strip()
 
 
+def _is_transient_error(exc: Exception) -> bool:
+    """5xx / gateway / connection errors are worth retrying."""
+    msg = str(exc).lower()
+    if any(tok in msg for tok in ("502", "503", "504", "bad gateway", "gateway timeout", "temporarily unavailable")):
+        return True
+    code = getattr(exc, "code", None)
+    if isinstance(code, int) and 500 <= code < 600:
+        return True
+    return False
+
+
+def _retry(op, *, attempts: int = 4, base_delay: float = 2.0, label: str = "request"):
+    """Call ``op()`` with exponential backoff on transient Supabase errors."""
+    import time
+
+    for attempt in range(1, attempts + 1):
+        try:
+            return op()
+        except Exception as exc:
+            if attempt == attempts or not _is_transient_error(exc):
+                raise
+            delay = base_delay * (2 ** (attempt - 1))
+            print(f"  {label} attempt {attempt} hit transient error ({exc}); retrying in {delay:.0f}s")
+            time.sleep(delay)
+
+
+def _batched_upsert(client, table: str, records: list[dict], *, on_conflict: str, batch_size: int = 100) -> int:
+    """
+    Upsert ``records`` into ``table`` in chunks of ``batch_size``, with retry
+    on transient 5xx errors. Returns the total count processed.
+    """
+    total = 0
+    for i in range(0, len(records), batch_size):
+        chunk = records[i : i + batch_size]
+        _retry(
+            lambda c=chunk: client.table(table).upsert(c, on_conflict=on_conflict).execute(),
+            label=f"{table} batch {i // batch_size + 1}",
+        )
+        total += len(chunk)
+    return total
+
+
 # Physical-gift point derivation for the new Costing sheet, which only
 # carries name + INR value. 5 INR per point matches the historical catalog;
 # slabs are assigned A/B/C/... in ascending INR order.
@@ -44,10 +86,13 @@ _SLAB_LETTERS = ["A", "B", "C", "D", "E", "F", "G"]
 
 
 def _upsert_catalog_item(client, record: dict, catalog_map: dict[str, int]) -> None:
-    resp = client.table("gifts_catalog").upsert(
-        record, on_conflict="name"
-    ).execute()
-    if resp.data:
+    resp = _retry(
+        lambda: client.table("gifts_catalog").upsert(
+            record, on_conflict="name"
+        ).execute(),
+        label=f"catalog upsert {record.get('name', '?')}",
+    )
+    if resp and resp.data:
         catalog_map[normalize_name(record["name"])] = resp.data[0]["id"]
 
 
@@ -212,13 +257,13 @@ def seed_retailers(client, excel_path: str) -> int:
         print("  ERROR: Could not find SF ID column. Available:", list(df.columns))
         return 0
 
-    count = 0
+    records: list[dict] = []
     for _, row in df.iterrows():
         sf_id = str(row.get(col_map.get("sf_id", ""), "")).strip()
         if not sf_id or sf_id.lower() == "nan":
             continue
 
-        record = {
+        records.append({
             "sf_id": sf_id,
             "retailer_name": str(row.get(col_map.get("retailer_name", ""), "")).strip(),
             "distributor_name": str(row.get(col_map.get("distributor_name", ""), "")).strip(),
@@ -230,11 +275,11 @@ def seed_retailers(client, excel_path: str) -> int:
             "earned_points": _safe_float(row.get(col_map.get("earned_points", ""))) or 0.0,
             "eligible_slab": _safe_str(row.get(col_map.get("eligible_slab", ""))),
             "max_eligible_gift": _safe_str(row.get(col_map.get("max_eligible_gift", ""))),
-        }
+        })
 
-        client.table("retailers").upsert(record, on_conflict="sf_id").execute()
-        count += 1
-
+    count = _batched_upsert(
+        client, "retailers", records, on_conflict="sf_id", batch_size=100
+    )
     print(f"  Upserted {count} retailers")
     return count
 
@@ -320,7 +365,10 @@ def seed_app_users(client) -> None:
         {"name": "Sales Team", "pin": "1111", "role": "sm_tm"},
     ]
     for user in users:
-        client.table("app_users").upsert(user, on_conflict="pin").execute()
+        _retry(
+            lambda u=user: client.table("app_users").upsert(u, on_conflict="pin").execute(),
+            label=f"app_user {user['name']}",
+        )
     print(f"  Seeded {len(users)} app users")
 
 

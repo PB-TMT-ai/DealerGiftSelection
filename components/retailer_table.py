@@ -10,23 +10,57 @@ from utils.constants import VOUCHER_POINTS_TO_INR
 
 def render_filters(retailers: list[dict]) -> dict:
     """
-    Render filter controls in the sidebar. Returns a dict of active filters.
+    Render cascading filter controls in the sidebar.
+
+    Selection in an upstream filter narrows the options shown in
+    downstream filters: Zone -> State -> Distributor.
     """
     with st.sidebar:
         st.markdown("### Filters")
 
-        # Collect unique values for filter options
-        distributors = sorted({r["distributor_name"] for r in retailers if r.get("distributor_name")})
-        states = sorted({r["state_name"] for r in retailers if r.get("state_name")})
         zones = sorted({r["zone"] for r in retailers if r.get("zone")})
 
         selected_zones = st.multiselect("Zone", options=zones, key="filter_zones")
-        selected_states = st.multiselect("State", options=states, key="filter_states")
+
+        # States cascade from selected zones
+        if selected_zones:
+            available_states = sorted({
+                r["state_name"] for r in retailers
+                if r.get("state_name") and r.get("zone") in selected_zones
+            })
+        else:
+            available_states = sorted({
+                r["state_name"] for r in retailers if r.get("state_name")
+            })
+
+        # Drop any previously-selected states that are no longer valid
+        prior_states = st.session_state.get("filter_states", [])
+        valid_states = [s for s in prior_states if s in available_states]
+        if valid_states != prior_states:
+            st.session_state["filter_states"] = valid_states
+
+        selected_states = st.multiselect(
+            "State", options=available_states, key="filter_states"
+        )
+
+        # Distributors cascade from selected zones AND states
+        matching = retailers
+        if selected_zones:
+            matching = [r for r in matching if r.get("zone") in selected_zones]
+        if selected_states:
+            matching = [r for r in matching if r.get("state_name") in selected_states]
+        available_distributors = sorted({
+            r["distributor_name"] for r in matching if r.get("distributor_name")
+        })
+
+        # Reset distributor selection if no longer valid
+        prior_dist = st.session_state.get("filter_distributor", "All")
+        if prior_dist != "All" and prior_dist not in available_distributors:
+            st.session_state["filter_distributor"] = "All"
 
         distributor = st.selectbox(
             "Distributor",
-            options=["All"] + distributors,
-            index=0,
+            options=["All"] + available_distributors,
             key="filter_distributor",
         )
 

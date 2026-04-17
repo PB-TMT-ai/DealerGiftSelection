@@ -29,6 +29,7 @@ def render_admin() -> None:
 
     with st.spinner("Loading consolidated data..."):
         retailers = db.get_all_retailers_with_selections()
+        retailers = [r for r in retailers if int(r.get("earned_points") or 0) > 0]
 
     if not retailers:
         st.warning("No retailer data found. Have you run the seeding script?")

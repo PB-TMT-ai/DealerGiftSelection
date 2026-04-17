@@ -10,77 +10,71 @@ from utils.constants import VOUCHER_POINTS_TO_INR
 
 def render_filters(retailers: list[dict]) -> dict:
     """
-    Render cascading filter controls in an inline expander.
+    Render cascading filter controls as the first step of the flow.
 
     Selection in an upstream filter narrows the options shown in
     downstream filters: Zone -> State -> Distributor.
     """
-    with st.expander("Filters", expanded=False):
-        zones = sorted({r["zone"] for r in retailers if r.get("zone")})
+    st.subheader("1. Filter retailers")
 
-        selected_zones = st.multiselect("Zone", options=zones, key="filter_zones")
+    zones = sorted({r["zone"] for r in retailers if r.get("zone")})
 
-        # States cascade from selected zones
-        if selected_zones:
-            available_states = sorted({
-                r["state_name"] for r in retailers
-                if r.get("state_name") and r.get("zone") in selected_zones
-            })
-        else:
-            available_states = sorted({
-                r["state_name"] for r in retailers if r.get("state_name")
-            })
+    selected_zones = st.multiselect("Zone", options=zones, key="filter_zones")
 
-        # Drop any previously-selected states that are no longer valid
-        prior_states = st.session_state.get("filter_states", [])
-        valid_states = [s for s in prior_states if s in available_states]
-        if valid_states != prior_states:
-            st.session_state["filter_states"] = valid_states
-
-        selected_states = st.multiselect(
-            "State", options=available_states, key="filter_states"
-        )
-
-        # Distributors cascade from selected zones AND states
-        matching = retailers
-        if selected_zones:
-            matching = [r for r in matching if r.get("zone") in selected_zones]
-        if selected_states:
-            matching = [r for r in matching if r.get("state_name") in selected_states]
-        available_distributors = sorted({
-            r["distributor_name"] for r in matching if r.get("distributor_name")
+    # States cascade from selected zones
+    if selected_zones:
+        available_states = sorted({
+            r["state_name"] for r in retailers
+            if r.get("state_name") and r.get("zone") in selected_zones
+        })
+    else:
+        available_states = sorted({
+            r["state_name"] for r in retailers if r.get("state_name")
         })
 
-        # Reset distributor selection if no longer valid
-        prior_dist = st.session_state.get("filter_distributor", "All")
-        if prior_dist != "All" and prior_dist not in available_distributors:
-            st.session_state["filter_distributor"] = "All"
+    # Drop any previously-selected states that are no longer valid
+    prior_states = st.session_state.get("filter_states", [])
+    valid_states = [s for s in prior_states if s in available_states]
+    if valid_states != prior_states:
+        st.session_state["filter_states"] = valid_states
 
-        distributor = st.selectbox(
-            "Distributor",
-            options=["All"] + available_distributors,
-            key="filter_distributor",
-        )
+    selected_states = st.multiselect(
+        "State", options=available_states, key="filter_states"
+    )
 
-        retailer_search = st.text_input(
-            "Search retailer name",
-            placeholder="Type to filter...",
-            key="filter_retailer_search",
-        )
+    # Distributors cascade from selected zones AND states
+    matching = retailers
+    if selected_zones:
+        matching = [r for r in matching if r.get("zone") in selected_zones]
+    if selected_states:
+        matching = [r for r in matching if r.get("state_name") in selected_states]
+    available_distributors = sorted({
+        r["distributor_name"] for r in matching if r.get("distributor_name")
+    })
 
-        has_selections = st.radio(
-            "Has selections?",
-            options=["All", "Yes", "No"],
-            index=0,
-            horizontal=True,
-            key="filter_has_selections",
-        )
+    # Reset distributor selection if no longer valid
+    prior_dist = st.session_state.get("filter_distributor", "All")
+    if prior_dist != "All" and prior_dist not in available_distributors:
+        st.session_state["filter_distributor"] = "All"
+
+    distributor = st.selectbox(
+        "Distributor",
+        options=["All"] + available_distributors,
+        key="filter_distributor",
+    )
+
+    has_selections = st.radio(
+        "Has selections?",
+        options=["All", "Yes", "No"],
+        index=0,
+        horizontal=True,
+        key="filter_has_selections",
+    )
 
     return {
         "distributor": distributor if distributor != "All" else None,
         "states": selected_states or None,
         "zones": selected_zones or None,
-        "retailer_search": retailer_search.strip() or None,
         "has_selections": {"All": None, "Yes": True, "No": False}[has_selections],
     }
 
@@ -105,9 +99,6 @@ def apply_filters(
             continue
         if filters["zones"] and r.get("zone") not in filters["zones"]:
             continue
-        if filters["retailer_search"]:
-            if filters["retailer_search"].lower() not in r.get("retailer_name", "").lower():
-                continue
 
         has_sel = used > 0
         if filters["has_selections"] is True and not has_sel:
@@ -192,7 +183,7 @@ def render_retailer_table(
     ]
 
     selected_idx = st.selectbox(
-        "Select a retailer to manage gifts",
+        "2. Select a retailer to manage gifts",
         options=range(len(names)),
         format_func=lambda i: names[i],
         index=None,

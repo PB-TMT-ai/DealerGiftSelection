@@ -56,39 +56,67 @@ def _render_gift_picker_body(
     live_total = live_physical + live_voucher
     live_remaining = earned - live_total
 
-    # Sticky points header — stays visible while dialog body scrolls.
+    # Sticky balance bar — single HTML block so CSS sticky actually works.
+    # Streamlit renders each st.metric as a separate DOM element, which breaks
+    # CSS sticky wrapping. A single st.markdown block stays as one element.
+    utilization = (live_total / earned * 100) if earned > 0 else 0
+    remaining_color = "#ff4b4b" if live_remaining < 0 else "#31c48d"
+
     st.markdown(
-        """
+        f"""
         <style>
-        div[data-testid="stDialog"] div.gift-sticky-balance {
+        .sticky-balance {{
             position: sticky;
             top: 0;
+            z-index: 999;
             background: var(--background-color, #ffffff);
-            z-index: 10;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-            margin-bottom: 0.5rem;
-        }
+            padding: 0.75rem 0.25rem;
+            border-bottom: 2px solid rgba(128, 128, 128, 0.15);
+            margin-bottom: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            gap: 0.25rem;
+        }}
+        .sticky-balance .bal-metric {{
+            flex: 1;
+            text-align: center;
+        }}
+        .sticky-balance .bal-label {{
+            display: block;
+            font-size: 0.7rem;
+            color: #808080;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }}
+        .sticky-balance .bal-value {{
+            display: block;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }}
         </style>
-        <div class="gift-sticky-balance-anchor"></div>
+        <div class="sticky-balance">
+            <div class="bal-metric">
+                <span class="bal-label">Earned</span>
+                <span class="bal-value">{earned:,}</span>
+            </div>
+            <div class="bal-metric">
+                <span class="bal-label">Redeeming</span>
+                <span class="bal-value">{live_total:,}</span>
+            </div>
+            <div class="bal-metric">
+                <span class="bal-label">Remaining</span>
+                <span class="bal-value" style="color:{remaining_color}">{live_remaining:,}</span>
+            </div>
+            <div class="bal-metric">
+                <span class="bal-label">Utilization</span>
+                <span class="bal-value">{utilization:.0f}%</span>
+            </div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
-    with st.container():
-        st.markdown('<div class="gift-sticky-balance">', unsafe_allow_html=True)
-        bal_cols = st.columns(4)
-        with bal_cols[0]:
-            st.metric("Earned", f"{earned:,}")
-        with bal_cols[1]:
-            st.metric("Redeeming", f"{live_total:,}")
-        with bal_cols[2]:
-            st.metric("Remaining", f"{live_remaining:,}")
-        with bal_cols[3]:
-            utilization = (live_total / earned * 100) if earned > 0 else 0
-            st.metric("Utilization", f"{utilization:.0f}%")
-        if live_remaining < 0:
-            st.error(f"Over budget by {abs(live_remaining):,} points! Remove some items to save.")
-        st.markdown("</div>", unsafe_allow_html=True)
+    if live_remaining < 0:
+        st.error(f"Over budget by {abs(live_remaining):,} points! Remove some items to save.")
 
     # Suggestions only surface when the user is within budget, and always
     # priced against what is left — they can never push a user over earned.

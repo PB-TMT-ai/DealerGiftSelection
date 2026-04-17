@@ -37,6 +37,20 @@ jobs:
           fi
           echo "Seeding from: ${{ inputs.excel_file }}"
 
+      - name: Verify secrets are set
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          missing=()
+          [ -z "$SUPABASE_URL" ] && missing+=("SUPABASE_URL")
+          [ -z "$SUPABASE_KEY" ] && missing+=("SUPABASE_KEY")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing repository secret(s): ${missing[*]}. Add them at Settings → Secrets and variables → Actions → Repository secrets, with the exact names SUPABASE_URL and SUPABASE_KEY (case-sensitive)."
+            exit 1
+          fi
+          echo "Secrets present. URL host: $(echo "$SUPABASE_URL" | sed -E 's|https?://([^/]+).*|\1|')"
+
       - name: Run seeder
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

@@ -356,7 +356,24 @@ def main() -> None:
         print(f"ERROR: Excel file not found at {excel_path}")
         sys.exit(1)
 
+    import os
+    missing = [v for v in ("SUPABASE_URL", "SUPABASE_KEY") if not os.environ.get(v)]
+    if missing:
+        print(
+            f"ERROR: required environment variable(s) not set: {', '.join(missing)}. "
+            "In GitHub Actions, check that the repo secrets are named exactly "
+            "SUPABASE_URL and SUPABASE_KEY (case-sensitive) and added under "
+            "Repository secrets, not Environment secrets."
+        )
+        sys.exit(1)
+
     client = get_client()
+    if client is None:
+        print(
+            "ERROR: Supabase client is None — SUPABASE_URL is empty or set to 'demo'. "
+            "Seeder requires a live Supabase project."
+        )
+        sys.exit(1)
 
     print("1. Seeding gift catalog...")
     catalog_map = seed_gift_catalog(client, excel_path)

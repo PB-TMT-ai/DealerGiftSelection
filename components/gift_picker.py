@@ -17,8 +17,8 @@ def render_gift_picker(
     """
     Render the gift picker UI for a retailer.
 
-    Shows catalog cards with quantity steppers, Amazon Voucher input,
-    live running balance, and save button.
+    Shows live running balance above the catalog, then full-width gift cards,
+    voucher input, and save button. Designed for mobile-first vertical scrolling.
     """
     sf_id = retailer["sf_id"]
     earned = int(retailer["earned_points"])
@@ -27,11 +27,9 @@ def render_gift_picker(
     st.markdown(f"### Gift Selection for {retailer['retailer_name']}")
     st.caption(f"SF ID: {sf_id} · Slab: {retailer.get('eligible_slab', '—')}")
 
-    # Separate physical gifts from voucher
     physical_gifts = [g for g in catalog if not g.get("is_flexible")]
     voucher_gift = next((g for g in catalog if g.get("is_flexible")), None)
 
-    # Build existing selection lookup: gift_id -> {quantity, points_used}
     existing_map: dict[int, dict] = {}
     for sel in existing_selections:
         existing_map[sel["gift_id"]] = {
@@ -39,53 +37,64 @@ def render_gift_picker(
             "points_used": sel.get("points_used", 0),
         }
 
-    # ---------- Physical Gift Cards ----------
+    # ---------- Live Balance (read from session_state so it stays above cards) ----------
+    live_physical, live_voucher = _read_live_totals(
+        sf_id, physical_gifts, voucher_gift, existing_map
+    )
+    live_total = live_physical + live_voucher
+    live_remaining = earned - live_total
+
+    bal_cols = st.columns(4)
+    with bal_cols[0]:
+        st.metric("Earned", f"{earned:,}")
+    with bal_cols[1]:
+        st.metric("Redeeming", f"{live_total:,}")
+    with bal_cols[2]:
+        st.metric("Remaining", f"{live_remaining:,}")
+    with bal_cols[3]:
+        utilization = (live_total / earned * 100) if earned > 0 else 0
+        st.metric("Utilization", f"{utilization:.0f}%")
+
+    if live_remaining < 0:
+        st.error(f"Over budget by {abs(live_remaining):,} points! Remove some items to save.")
+
+    st.divider()
+
+    # ---------- Physical Gift Cards (1 per row for mobile) ----------
     st.markdown("#### Physical Gifts")
 
     physical_total = 0
     selections: list[dict] = []
 
-    cols_per_row = 3
-    for i in range(0, len(physical_gifts), cols_per_row):
-        cols = st.columns(cols_per_row)
-        for j, col in enumerate(cols):
-            idx = i + j
-            if idx >= len(physical_gifts):
-                break
+    for gift in physical_gifts:
+        gift_id = gift["id"]
+        pts = gift["points_required"]
+        inr = gift.get("gift_value_inr", 0)
+        existing_qty = existing_map.get(gift_id, {}).get("quantity", 0)
 
-            gift = physical_gifts[idx]
-            gift_id = gift["id"]
-            pts = gift["points_required"]
-            inr = gift.get("gift_value_inr", 0)
+        with st.container(border=True):
+            st.markdown(f"**{gift['name']}**")
+            st.caption(f"Slab {gift.get('slab', '—')} · {pts:,} pts · ₹{inr:,}")
 
-            existing_qty = existing_map.get(gift_id, {}).get("quantity", 0)
+            qty = st.number_input(
+                "Qty",
+                min_value=0,
+                max_value=5,
+                value=existing_qty,
+                step=1,
+                key=f"gift_qty_{sf_id}_{gift_id}",
+            )
 
-            with col:
-                st.markdown(f"**{gift['name']}**")
-                st.caption(f"Slab {gift.get('slab', '—')} · {pts:,} pts · ₹{inr:,}")
-
-                qty = st.number_input(
-                    f"Qty",
-                    min_value=0,
-                    max_value=5,
-                    value=existing_qty,
-                    step=1,
-                    key=f"gift_qty_{sf_id}_{gift_id}",
-                    label_visibility="collapsed",
-                )
-
-                if qty > 0:
-                    cost = pts * qty
-                    physical_total += cost
-                    selections.append({
-                        "gift_id": gift_id,
-                        "points_used": pts,
-                        "quantity": qty,
-                    })
-
-                    # Check affordability
-                    if pts * qty > earned:
-                        st.caption(f"⚠️ Need {pts * qty - earned:,} more points")
+            if qty > 0:
+                cost = pts * qty
+                physical_total += cost
+                selections.append({
+                    "gift_id": gift_id,
+                    "points_used": pts,
+                    "quantity": qty,
+                })
+                if pts * qty > earned:
+                    st.caption(f"⚠️ Need {pts * qty - earned:,} more points")
 
     # ---------- Amazon Voucher ----------
     st.markdown("#### Amazon Voucher")
@@ -105,8 +114,6 @@ def render_gift_picker(
             )
         else:
             default_voucher = existing_voucher_pts if existing_voucher_pts >= VOUCHER_MIN_POINTS else remaining_after_physical
-
-            # Clamp default to available range
             default_voucher = max(VOUCHER_MIN_POINTS, min(default_voucher, remaining_after_physical))
 
             voucher_points = st.number_input(
@@ -125,7 +132,7 @@ def render_gift_picker(
 
                 if voucher_points < VOUCHER_MIN_POINTS:
                     st.error(f"Minimum voucher amount is {VOUCHER_MIN_POINTS} points.")
-                    voucher_points = 0  # Don't include invalid voucher
+                    voucher_points = 0
                 else:
                     selections.append({
                         "gift_id": voucher_id,
@@ -133,27 +140,11 @@ def render_gift_picker(
                         "quantity": 1,
                     })
 
-    # ---------- Live Balance Display ----------
-    total_used = physical_total + voucher_points
-    remaining = earned - total_used
-
     st.divider()
-    bal_cols = st.columns(4)
-    with bal_cols[0]:
-        st.metric("Earned Points", f"{earned:,}")
-    with bal_cols[1]:
-        st.metric("Redeeming", f"{total_used:,}")
-    with bal_cols[2]:
-        st.metric("Remaining", f"{remaining:,}", delta=None)
-    with bal_cols[3]:
-        utilization = (total_used / earned * 100) if earned > 0 else 0
-        st.metric("Utilization", f"{utilization:.0f}%")
-
-    if remaining < 0:
-        st.error(f"Over budget by {abs(remaining):,} points! Remove some items to save.")
 
     # ---------- Save / Clear ----------
-    btn_cols = st.columns(2)
+    total_used = physical_total + voucher_points
+    remaining = earned - total_used
 
     can_save = (
         len(selections) > 0
@@ -165,6 +156,7 @@ def render_gift_picker(
         )
     )
 
+    btn_cols = st.columns(2)
     with btn_cols[0]:
         if st.button(
             "Save Selections",
@@ -187,6 +179,33 @@ def render_gift_picker(
         st.caption("Select at least one gift to save.")
 
 
+def _read_live_totals(
+    sf_id: str,
+    physical_gifts: list[dict],
+    voucher_gift: dict | None,
+    existing_map: dict[int, dict],
+) -> tuple[int, int]:
+    """Read current widget state to show live balance above the cards."""
+    physical_total = 0
+    for gift in physical_gifts:
+        key = f"gift_qty_{sf_id}_{gift['id']}"
+        default_qty = existing_map.get(gift["id"], {}).get("quantity", 0)
+        qty = st.session_state.get(key, default_qty)
+        physical_total += gift["points_required"] * qty
+
+    voucher_pts = 0
+    if voucher_gift:
+        key = f"voucher_pts_{sf_id}"
+        if key in st.session_state:
+            voucher_pts = st.session_state[key]
+        else:
+            existing_pts = existing_map.get(voucher_gift["id"], {}).get("points_used", 0)
+            if existing_pts > 0:
+                voucher_pts = existing_pts
+
+    return physical_total, voucher_pts
+
+
 def _save_selections(
     sf_id: str,
     selections: list[dict],
@@ -194,11 +213,7 @@ def _save_selections(
     existing_selections: list[dict],
 ) -> None:
     """Execute the save via RPC with confirmation."""
-    # Show what's changing
-    existing_ids = {s["gift_id"] for s in existing_selections}
-    new_ids = {s["gift_id"] for s in selections}
-
-    if existing_ids:
+    if existing_selections:
         st.info("This will **replace** the existing selections with the new set.")
 
     try:
@@ -217,7 +232,6 @@ def _save_selections(
 
 
 def _clear_selections(sf_id: str, user_name: str) -> None:
-    """Remove all selections for a retailer."""
     try:
         with st.spinner("Clearing selections..."):
             db.replace_selections(sf_id, [], user_name)

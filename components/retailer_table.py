@@ -10,14 +10,12 @@ from utils.constants import VOUCHER_POINTS_TO_INR
 
 def render_filters(retailers: list[dict]) -> dict:
     """
-    Render cascading filter controls in the sidebar.
+    Render cascading filter controls in an inline expander.
 
     Selection in an upstream filter narrows the options shown in
     downstream filters: Zone -> State -> Distributor.
     """
-    with st.sidebar:
-        st.markdown("### Filters")
-
+    with st.expander("Filters", expanded=False):
         zones = sorted({r["zone"] for r in retailers if r.get("zone")})
 
         selected_zones = st.multiselect("Zone", options=zones, key="filter_zones")
@@ -185,21 +183,13 @@ def render_retailer_table(
 
     st.markdown(f"**{len(df)} retailers** matching filters")
 
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Balance": st.column_config.NumberColumn(
-                "Balance",
-                help="Earned points minus points used",
-            ),
-        },
-    )
-
-    # Retailer selector
+    # Retailer selector — primary interaction on mobile. Balance in the label
+    # so SM/TMs can scan it without opening the overview table.
     sf_ids = [r["sf_id"] for r in filtered_retailers]
-    names = [f"{r['retailer_name']} ({r['sf_id']})" for r in filtered_retailers]
+    names = [
+        f"{r['retailer_name']} ({r['sf_id']}) — {r.get('balance', 0):,} pts"
+        for r in filtered_retailers
+    ]
 
     selected_idx = st.selectbox(
         "Select a retailer to manage gifts",
@@ -209,6 +199,19 @@ def render_retailer_table(
         placeholder="Choose a retailer...",
         key="retailer_selector",
     )
+
+    with st.expander("View all matching retailers", expanded=False):
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Balance": st.column_config.NumberColumn(
+                    "Balance",
+                    help="Earned points minus points used",
+                ),
+            },
+        )
 
     if selected_idx is not None:
         return sf_ids[selected_idx]

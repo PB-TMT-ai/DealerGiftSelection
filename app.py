@@ -1,7 +1,8 @@
 """
 Q4 Dealer Scheme Gift Selection Portal — Entry Point
 
-Streamlit multipage app with PIN-based authentication.
+Single-page Streamlit app with PIN-based auth.
+Login → Gift Selection (default). Admins can toggle to Admin Dashboard.
 Run with: streamlit run app.py
 """
 
@@ -13,14 +14,15 @@ st.set_page_config(
     page_title="Q4 Dealer Scheme Portal",
     page_icon="🎁",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 import auth  # noqa: E402
+from views.admin import render_admin  # noqa: E402
+from views.gift_selection import render_gift_selection  # noqa: E402
 
 
 def init_session_state() -> None:
-    """Initialize session state keys if they don't exist."""
     defaults = {
         "authenticated": False,
         "user_name": "",
@@ -28,6 +30,7 @@ def init_session_state() -> None:
         "user_id": None,
         "failed_attempts": 0,
         "lockout_until": 0,
+        "view": "gift_selection",
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -35,11 +38,9 @@ def init_session_state() -> None:
 
 
 def show_login() -> None:
-    """Render the PIN login screen."""
     st.markdown("## Q4 Dealer Scheme Portal")
     st.markdown("Enter your PIN to continue.")
 
-    # Check lockout
     locked, remaining = auth.is_locked_out(st.session_state)
     if locked:
         st.error(f"Too many failed attempts. Please wait {remaining} seconds.")
@@ -66,6 +67,7 @@ def show_login() -> None:
             st.session_state["user_name"] = user["name"]
             st.session_state["role"] = user["role"]
             st.session_state["user_id"] = user["id"]
+            st.session_state["view"] = "gift_selection"
             st.rerun()
         else:
             attempts = auth.record_failed_attempt(st.session_state)
@@ -77,29 +79,51 @@ def show_login() -> None:
                 st.rerun()
 
 
-def show_sidebar() -> None:
-    """Render the authenticated sidebar with user info and logout."""
-    with st.sidebar:
-        st.markdown(f"**{st.session_state['user_name']}**")
-        role_label = "Admin" if st.session_state["role"] == "admin" else "Sales/Territory Manager"
-        st.caption(role_label)
-        st.divider()
+def render_top_bar() -> None:
+    """Inline top bar: title, user, view switch (admin only), logout."""
+    is_admin = st.session_state["role"] == "admin"
+    view = st.session_state.get("view", "gift_selection")
 
-        if st.button("Logout", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.rerun()
+    title = "Admin Dashboard" if view == "admin" else "Gift Selection"
 
-
-def show_home() -> None:
-    """Render the home page after successful login."""
-    st.markdown("## Q4 Dealer Scheme Portal")
-    st.markdown("Welcome! Use the sidebar to navigate.")
-
-    if st.session_state["role"] == "admin":
-        st.info("You have **Admin** access. You can view both Gift Selection and Consolidated Admin pages.")
+    if is_admin:
+        cols = st.columns([3, 2, 2, 1])
     else:
-        st.info("Navigate to **Gift Selection** in the sidebar to manage retailer gift redemptions.")
+        cols = st.columns([5, 2, 1])
+
+    with cols[0]:
+        st.markdown(f"### {title}")
+
+    if is_admin:
+        with cols[1]:
+            role_label = "Admin"
+            st.caption(f"**{st.session_state['user_name']}** · {role_label}")
+        with cols[2]:
+            if view == "admin":
+                if st.button("← Gift Selection", use_container_width=True, key="nav_gift"):
+                    st.session_state["view"] = "gift_selection"
+                    st.rerun()
+            else:
+                if st.button("Admin Dashboard →", use_container_width=True, key="nav_admin"):
+                    st.session_state["view"] = "admin"
+                    st.rerun()
+        with cols[3]:
+            if st.button("Logout", use_container_width=True, key="logout_btn"):
+                _logout()
+    else:
+        with cols[1]:
+            st.caption(f"**{st.session_state['user_name']}** · Sales/Territory Manager")
+        with cols[2]:
+            if st.button("Logout", use_container_width=True, key="logout_btn"):
+                _logout()
+
+    st.divider()
+
+
+def _logout() -> None:
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
 
 
 def main() -> None:
@@ -109,8 +133,13 @@ def main() -> None:
         show_login()
         st.stop()
 
-    show_sidebar()
-    show_home()
+    render_top_bar()
+
+    view = st.session_state.get("view", "gift_selection")
+    if view == "admin" and st.session_state["role"] == "admin":
+        render_admin()
+    else:
+        render_gift_selection()
 
 
 if __name__ == "__main__":

@@ -118,7 +118,7 @@ def _render_gift_picker_body(
         remaining_excluding_self = earned - (live_total - pts * current_qty)
         affordable_qty = remaining_excluding_self // pts if pts > 0 else 0
         max_qty = max(current_qty, int(affordable_qty))
-        max_value = min(5, max_qty)
+        max_value = max_qty
 
         with st.container(border=True):
             st.markdown(f"**{gift['name']}**")

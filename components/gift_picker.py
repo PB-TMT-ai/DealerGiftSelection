@@ -107,7 +107,6 @@ def _render_gift_picker_body(
     for gift in physical_gifts:
         gift_id = gift["id"]
         pts = gift["points_required"]
-        inr = gift.get("gift_value_inr", 0)
         existing_qty = existing_map.get(gift_id, {}).get("quantity", 0)
 
         # Hard-block: cap this gift's qty at what the remaining budget allows,
@@ -122,7 +121,7 @@ def _render_gift_picker_body(
 
         with st.container(border=True):
             st.markdown(f"**{gift['name']}**")
-            st.caption(f"Slab {gift.get('slab', '—')} · {pts:,} pts · ₹{inr:,}")
+            st.caption(f"Slab {gift.get('slab', '—')} · {pts:,} pts")
 
             if max_value == 0 and current_qty == 0:
                 st.error(f"Not enough points remaining to add this gift ({pts:,} pts required).")

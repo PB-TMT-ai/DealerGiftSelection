@@ -46,8 +46,7 @@ def render_suggestions(balance: int, catalog: list[dict]) -> None:
                 else:
                     parts.append(
                         f"{item.quantity}× {item.gift_name}: "
-                        f"{item.points_required * item.quantity:,} pts "
-                        f"(₹{item.gift_value_inr * item.quantity:,})"
+                        f"{item.points_required * item.quantity:,} pts"
                     )
 
             for part in parts:

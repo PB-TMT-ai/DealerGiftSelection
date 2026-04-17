@@ -367,23 +367,49 @@ def get_gifts_catalog() -> list[dict]:
 # Retailers
 # ---------------------------------------------------------------------------
 
-def get_retailers() -> list[dict]:
-    """Return all retailers who have earned at least 1 point."""
-    if _DEMO_MODE:
-        return sorted(
-            (r for r in _DEMO_RETAILERS if int(r.get("earned_points") or 0) > 0),
-            key=lambda r: r["retailer_name"],
-        )
+def _normalize_state(value: str | None) -> str | None:
+    """Normalize a state name to Title Case (e.g. 'UTTAR PRADESH' -> 'Uttar Pradesh').
 
-    resp = (
-        get_client()
-        .table("retailers")
-        .select("*")
-        .gt("earned_points", 0)
-        .order("retailer_name")
-        .execute()
+    Collapses runs of internal whitespace and lowercases connector words
+    ('and', '&') so dropdowns don't show case-only duplicates.
+    """
+    if not value:
+        return None
+    s = " ".join(str(value).split())
+    if not s or s.lower() in {"nan", "none", "0", "#n/a"}:
+        return None
+    titled = s.title()
+    return " ".join(
+        w.lower() if w.lower() in {"and", "of", "the"} else w
+        for w in titled.split()
     )
-    return resp.data or []
+
+
+def get_retailers() -> list[dict]:
+    """Return all retailers who have earned at least 1 point.
+
+    State names are normalized to Title Case so the UI dropdown shows a
+    single canonical entry per state regardless of how they were stored.
+    """
+    if _DEMO_MODE:
+        rows = [
+            r for r in _DEMO_RETAILERS if int(r.get("earned_points") or 0) > 0
+        ]
+    else:
+        resp = (
+            get_client()
+            .table("retailers")
+            .select("*")
+            .gt("earned_points", 0)
+            .order("retailer_name")
+            .execute()
+        )
+        rows = resp.data or []
+
+    for r in rows:
+        r["state_name"] = _normalize_state(r.get("state_name"))
+
+    return sorted(rows, key=lambda r: r.get("retailer_name") or "")
 
 
 def get_retailer(sf_id: str) -> dict | None:

@@ -93,6 +93,9 @@ def apply_filters(
         earned = int(r["earned_points"])
         balance = earned - used
 
+        if earned <= 0:
+            continue
+
         if filters["distributor"] and r.get("distributor_name") != filters["distributor"]:
             continue
         if filters["states"] and r.get("state_name") not in filters["states"]:

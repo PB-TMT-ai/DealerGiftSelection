@@ -368,11 +368,21 @@ def get_gifts_catalog() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def get_retailers() -> list[dict]:
-    """Return all retailers."""
+    """Return all retailers who have earned at least 1 point."""
     if _DEMO_MODE:
-        return sorted(_DEMO_RETAILERS, key=lambda r: r["retailer_name"])
+        return sorted(
+            (r for r in _DEMO_RETAILERS if int(r.get("earned_points") or 0) > 0),
+            key=lambda r: r["retailer_name"],
+        )
 
-    resp = get_client().table("retailers").select("*").order("retailer_name").execute()
+    resp = (
+        get_client()
+        .table("retailers")
+        .select("*")
+        .gt("earned_points", 0)
+        .order("retailer_name")
+        .execute()
+    )
     return resp.data or []
 
 

@@ -56,61 +56,54 @@ def _render_gift_picker_body(
     live_total = live_physical + live_voucher
     live_remaining = earned - live_total
 
-    # Sticky balance bar — single HTML block so CSS sticky actually works.
-    # Streamlit renders each st.metric as a separate DOM element, which breaks
-    # CSS sticky wrapping. A single st.markdown block stays as one element.
+    # Fixed bottom balance bar — always visible regardless of scroll.
+    # CSS sticky doesn't work in Streamlit due to overflow:hidden on ancestor divs.
     utilization = (live_total / earned * 100) if earned > 0 else 0
     remaining_color = "#ff4b4b" if live_remaining < 0 else "#31c48d"
 
     st.markdown(
         f"""
         <style>
-        .sticky-balance {{
-            position: sticky;
-            top: 0;
-            z-index: 999;
-            background: var(--background-color, #ffffff);
-            padding: 0.75rem 0.25rem;
-            border-bottom: 2px solid rgba(128, 128, 128, 0.15);
-            margin-bottom: 0.75rem;
+        .balance-bar {{
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 99999;
+            background: rgba(255, 255, 255, 0.97);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.12);
+            padding: 0.6rem 1rem;
             display: flex;
-            justify-content: space-between;
-            gap: 0.25rem;
+            justify-content: space-around;
+            gap: 0.5rem;
         }}
-        .sticky-balance .bal-metric {{
-            flex: 1;
+        .balance-bar .bm {{
             text-align: center;
         }}
-        .sticky-balance .bal-label {{
+        .balance-bar .bm .bl {{
             display: block;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: #808080;
             text-transform: uppercase;
-            letter-spacing: 0.03em;
         }}
-        .sticky-balance .bal-value {{
+        .balance-bar .bm .bv {{
             display: block;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 700;
         }}
+        @media (prefers-color-scheme: dark) {{
+            .balance-bar {{
+                background: rgba(14, 17, 23, 0.97);
+            }}
+        }}
         </style>
-        <div class="sticky-balance">
-            <div class="bal-metric">
-                <span class="bal-label">Earned</span>
-                <span class="bal-value">{earned:,}</span>
-            </div>
-            <div class="bal-metric">
-                <span class="bal-label">Redeeming</span>
-                <span class="bal-value">{live_total:,}</span>
-            </div>
-            <div class="bal-metric">
-                <span class="bal-label">Remaining</span>
-                <span class="bal-value" style="color:{remaining_color}">{live_remaining:,}</span>
-            </div>
-            <div class="bal-metric">
-                <span class="bal-label">Utilization</span>
-                <span class="bal-value">{utilization:.0f}%</span>
-            </div>
+        <div class="balance-bar">
+            <div class="bm"><span class="bl">Earned</span><span class="bv">{earned:,}</span></div>
+            <div class="bm"><span class="bl">Redeeming</span><span class="bv">{live_total:,}</span></div>
+            <div class="bm"><span class="bl">Remaining</span><span class="bv" style="color:{remaining_color}">{live_remaining:,}</span></div>
+            <div class="bm"><span class="bl">Utilization</span><span class="bv">{utilization:.0f}%</span></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -275,6 +268,9 @@ def _render_gift_picker_body(
 
     if not can_save and len(selections) == 0:
         st.caption("Select at least one gift to save.")
+
+    # Spacer so content isn't hidden behind the fixed bottom balance bar
+    st.markdown('<div style="height:70px"></div>', unsafe_allow_html=True)
 
 
 def _read_live_totals(

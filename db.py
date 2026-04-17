@@ -208,6 +208,91 @@ def _load_from_excel() -> list[dict]:
     return retailers
 
 
+# Physical gifts in the Costing sheet only list name + INR value.
+# Points are derived at a fixed 5 INR per point (matches historical catalog)
+# and slabs are assigned A/B/C/D/E in ascending point order, which lines up
+# with _SLAB_THRESHOLDS above.
+_PHYSICAL_INR_PER_POINT = 5
+_SLAB_LETTERS = ["A", "B", "C", "D", "E", "F", "G"]
+
+
+def _load_catalog_from_excel() -> list[dict]:
+    """
+    Load the gift catalog from the Excel ``Costing`` sheet when present.
+
+    Returns an empty list if the sheet is absent or cannot be parsed, so the
+    caller can fall back to the hardcoded catalog.
+    """
+    import pandas as pd
+
+    if _EXCEL_PATH is None:
+        return []
+
+    try:
+        xl = pd.ExcelFile(_EXCEL_PATH)
+        if "Costing" not in xl.sheet_names:
+            return []
+        df = pd.read_excel(
+            _EXCEL_PATH, sheet_name="Costing", skiprows=3, header=None
+        )
+    except Exception:
+        return []
+
+    physical_items: list[tuple[str, int]] = []
+    has_voucher = False
+
+    for _, row in df.iterrows():
+        name = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""
+        if not name or name.lower() == "nan":
+            continue
+        try:
+            inr = int(float(row.iloc[1])) if pd.notna(row.iloc[1]) else None
+        except (ValueError, TypeError):
+            continue
+        if inr is None:
+            continue
+
+        if "amazon" in name.lower():
+            has_voucher = True
+        else:
+            physical_items.append((name, inr))
+
+    if not physical_items:
+        return []
+
+    physical_items.sort(key=lambda t: t[1])
+
+    catalog: list[dict] = []
+    next_id = 1
+    for i, (name, inr) in enumerate(physical_items):
+        slab = _SLAB_LETTERS[i] if i < len(_SLAB_LETTERS) else None
+        catalog.append({
+            "id": next_id,
+            "name": name,
+            "slab": slab,
+            "points_required": int(inr / _PHYSICAL_INR_PER_POINT),
+            "gift_value_inr": inr,
+            "is_flexible": False,
+        })
+        next_id += 1
+
+    catalog.append({
+        "id": next_id,
+        "name": "Amazon Voucher",
+        "slab": None,
+        "points_required": None,
+        "gift_value_inr": None,
+        "is_flexible": True,
+    })
+
+    # Suppress unused warning — has_voucher is informational only for now;
+    # the catalog always includes the voucher regardless so the voucher UI
+    # still works even if the Costing sheet omits it.
+    _ = has_voucher
+
+    return catalog
+
+
 # --- Hardcoded fallback (used when Excel file is not available) ---
 
 _FALLBACK_CATALOG: list[dict] = [
@@ -235,8 +320,9 @@ _FALLBACK_RETAILERS: list[dict] = [
 # --- Load demo data (Excel if available, else fallback) ---
 
 _excel_retailers = _load_from_excel()
+_excel_catalog = _load_catalog_from_excel()
 
-_DEMO_CATALOG: list[dict] = _FALLBACK_CATALOG
+_DEMO_CATALOG: list[dict] = _excel_catalog if _excel_catalog else _FALLBACK_CATALOG
 _DEMO_RETAILERS: list[dict] = _excel_retailers if _excel_retailers else _FALLBACK_RETAILERS
 
 

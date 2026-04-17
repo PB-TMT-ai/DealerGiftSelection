@@ -30,7 +30,7 @@ def _render_gift_picker_body(
     earned = int(retailer["earned_points"])
 
     st.markdown(f"### {retailer['retailer_name']}")
-    st.caption(f"SF ID: {sf_id} · Slab: {retailer.get('eligible_slab', '—')}")
+    st.caption(f"SF ID: {sf_id}")
 
     physical_gifts = [g for g in catalog if not g.get("is_flexible")]
     voucher_gift = next((g for g in catalog if g.get("is_flexible")), None)
@@ -237,36 +237,139 @@ def _render_gift_picker_body(
         )
     )
 
-    btn_cols = st.columns(3)
-    with btn_cols[0]:
-        if st.button(
-            "Save Selections",
-            disabled=not can_save,
-            use_container_width=True,
-            type="primary",
-            key=f"save_{sf_id}",
-        ):
-            _save_selections(sf_id, selections, user_name, existing_selections)
+    confirm_key = f"confirm_save_{sf_id}"
+    pending_confirm = st.session_state.get(confirm_key)
 
-    with btn_cols[1]:
-        if st.button(
-            "Clear All",
-            use_container_width=True,
-            key=f"clear_{sf_id}",
-        ):
-            _clear_selections(sf_id, user_name)
+    if pending_confirm is not None:
+        _render_confirm_panel(
+            sf_id=sf_id,
+            earned=earned,
+            pending=pending_confirm,
+            user_name=user_name,
+            existing_selections=existing_selections,
+            confirm_key=confirm_key,
+        )
+    else:
+        btn_cols = st.columns(3)
+        with btn_cols[0]:
+            if st.button(
+                "Save Selections",
+                disabled=not can_save,
+                use_container_width=True,
+                type="primary",
+                key=f"save_{sf_id}",
+            ):
+                st.session_state[confirm_key] = _build_confirm_snapshot(
+                    selections, catalog
+                )
+                st.rerun()
 
-    with btn_cols[2]:
-        if st.button(
-            "Close",
-            use_container_width=True,
-            key=f"close_{sf_id}",
-        ):
-            st.session_state.pop("retailer_selector", None)
-            st.rerun()
+        with btn_cols[1]:
+            if st.button(
+                "Clear All",
+                use_container_width=True,
+                key=f"clear_{sf_id}",
+            ):
+                _clear_selections(sf_id, user_name)
 
-    if not can_save and len(selections) == 0:
-        st.caption("Select at least one gift to save.")
+        with btn_cols[2]:
+            if st.button(
+                "Close",
+                use_container_width=True,
+                key=f"close_{sf_id}",
+            ):
+                st.session_state.pop("retailer_selector", None)
+                st.rerun()
+
+        if not can_save and len(selections) == 0:
+            st.caption("Select at least one gift to save.")
+
+
+def _build_confirm_snapshot(
+    selections: list[dict], catalog: list[dict]
+) -> list[dict]:
+    """Attach display metadata (gift name, voucher flag) to raw selections."""
+    catalog_by_id = {g["id"]: g for g in catalog}
+    snapshot: list[dict] = []
+    for sel in selections:
+        gift = catalog_by_id.get(sel["gift_id"], {})
+        snapshot.append({
+            "gift_id": sel["gift_id"],
+            "gift_name": gift.get("name", "Gift"),
+            "is_voucher": bool(gift.get("is_flexible")),
+            "points_used": sel["points_used"],
+            "quantity": sel["quantity"],
+        })
+    return snapshot
+
+
+def _render_confirm_panel(
+    *,
+    sf_id: str,
+    earned: int,
+    pending: list[dict],
+    user_name: str,
+    existing_selections: list[dict],
+    confirm_key: str,
+) -> None:
+    """Confirmation panel shown after the user clicks Save Selections."""
+    with st.container(border=True):
+        st.warning(
+            "Please review and confirm the final selection. "
+            "This will replace any existing saved selections."
+        )
+        st.markdown("**Final selection**")
+
+        confirm_total = 0
+        for item in pending:
+            if item["is_voucher"]:
+                inr = item["points_used"] * VOUCHER_POINTS_TO_INR
+                st.markdown(
+                    f"- **{item['gift_name']}** — "
+                    f"{item['points_used']:,} pts → ₹{inr:,}"
+                )
+                confirm_total += item["points_used"]
+            else:
+                subtotal = item["points_used"] * item["quantity"]
+                st.markdown(
+                    f"- **{item['gift_name']}** × {item['quantity']} — "
+                    f"{subtotal:,} pts"
+                )
+                confirm_total += subtotal
+
+        st.markdown(
+            f"**Total: {confirm_total:,} / {earned:,} pts · "
+            f"Remaining {earned - confirm_total:,} pts**"
+        )
+
+        confirm_cols = st.columns(2)
+        with confirm_cols[0]:
+            if st.button(
+                "Confirm & Save",
+                type="primary",
+                use_container_width=True,
+                key=f"confirm_yes_{sf_id}",
+            ):
+                raw_selections = [
+                    {
+                        "gift_id": i["gift_id"],
+                        "points_used": i["points_used"],
+                        "quantity": i["quantity"],
+                    }
+                    for i in pending
+                ]
+                st.session_state.pop(confirm_key, None)
+                _save_selections(
+                    sf_id, raw_selections, user_name, existing_selections
+                )
+        with confirm_cols[1]:
+            if st.button(
+                "Cancel",
+                use_container_width=True,
+                key=f"confirm_no_{sf_id}",
+            ):
+                st.session_state.pop(confirm_key, None)
+                st.rerun()
 
 
 def _read_live_totals(

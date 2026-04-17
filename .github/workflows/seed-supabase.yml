@@ -1,0 +1,49 @@
+name: Seed Supabase from Excel
+
+on:
+  workflow_dispatch:
+    inputs:
+      excel_file:
+        description: "Path (relative to repo root) of the Excel workbook to seed from"
+        required: true
+        default: "FY 26 Q4 dealer scheme_v2.xlsx"
+      import_current_gifts:
+        description: "Also import the 'Current gift' column as gift_selections (only meaningful for the old format)"
+        required: false
+        default: "false"
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install python-dotenv pandas openpyxl supabase pydantic
+
+      - name: Verify Excel file exists
+        run: |
+          if [ ! -f "${{ inputs.excel_file }}" ]; then
+            echo "::error::Excel file '${{ inputs.excel_file }}' not found in repo"
+            exit 1
+          fi
+          echo "Seeding from: ${{ inputs.excel_file }}"
+
+      - name: Run seeder
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          if [ "${{ inputs.import_current_gifts }}" = "true" ]; then
+            python scripts/seed_from_excel.py --import-current-gifts "${{ inputs.excel_file }}"
+          else
+            python scripts/seed_from_excel.py "${{ inputs.excel_file }}"
+          fi

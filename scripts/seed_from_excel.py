@@ -406,7 +406,7 @@ def main() -> None:
     parser.add_argument(
         "excel_path",
         nargs="?",
-        default="./FY 26 Q4 dealer scheme_v2.xlsx",
+        default="./FY 26 Q4 dealer scheme_v3.xlsx",
         help="Path to the source Excel file",
     )
     parser.add_argument(

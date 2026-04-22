@@ -6,7 +6,7 @@ on:
       excel_file:
         description: "Path (relative to repo root) of the Excel workbook to seed from"
         required: true
-        default: "FY 26 Q4 dealer scheme_v2.xlsx"
+        default: "FY 26 Q4 dealer scheme_v3.xlsx"
       import_current_gifts:
         description: "Also import the 'Current gift' column as gift_selections (only meaningful for the old format)"
         required: false

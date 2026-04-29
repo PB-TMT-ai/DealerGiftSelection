@@ -19,6 +19,20 @@ _PHONE_RE = re.compile(r"^[0-9+\-\s()]{7,20}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
+_FILTER_KEYS = (
+    "dd_filter_zones",
+    "dd_filter_states",
+    "dd_filter_distributor",
+    "dd_dealer_idx",
+)
+
+
+def _clear_filters() -> None:
+    """Reset cascading filters and the chosen dealer."""
+    for key in _FILTER_KEYS:
+        st.session_state.pop(key, None)
+
+
 def _filter_options(rows: list[dict], key: str, predicates: list) -> list[str]:
     """Return sorted unique values of `key` for rows matching every predicate."""
     matching = rows
@@ -29,7 +43,18 @@ def _filter_options(rows: list[dict], key: str, predicates: list) -> list[str]:
 
 def _render_filters(retailers: list[dict]) -> dict | None:
     """Cascading filter UI. Returns the selected dealer dict (or None)."""
-    st.subheader("1. Find a dealer")
+    header_cols = st.columns([4, 1])
+    with header_cols[0]:
+        st.subheader("1. Find a dealer")
+    with header_cols[1]:
+        if st.button(
+            "Clear selections",
+            use_container_width=True,
+            key="dd_clear_filters",
+            help="Reset Zone / State / Distributor / Dealer filters",
+        ):
+            _clear_filters()
+            st.rerun()
 
     # --- Zone ---
     zones = sorted({r["zone"] for r in retailers if r.get("zone")})
@@ -116,35 +141,64 @@ def _render_form(dealer: dict, user_name: str) -> None:
 
     existing = db.get_dealer_details(dealer["sf_id"]) or {}
 
+    form_keys = {
+        "name": f"dd_name_{dealer['sf_id']}",
+        "phone": f"dd_phone_{dealer['sf_id']}",
+        "email": f"dd_email_{dealer['sf_id']}",
+        "addr": f"dd_addr_{dealer['sf_id']}",
+        "loaded": f"dd_loaded_{dealer['sf_id']}",
+    }
+
+    if not st.session_state.get(form_keys["loaded"]):
+        st.session_state[form_keys["name"]] = existing.get("contact_name", "")
+        st.session_state[form_keys["phone"]] = existing.get("phone", "")
+        st.session_state[form_keys["email"]] = existing.get("email", "") or ""
+        st.session_state[form_keys["addr"]] = existing.get("delivery_address", "")
+        st.session_state[form_keys["loaded"]] = True
+
     if existing:
         st.success("Existing details loaded — edit and save to update.")
 
     with st.form(f"dealer_details_form_{dealer['sf_id']}", clear_on_submit=False):
         contact_name = st.text_input(
             "Name of the person",
-            value=existing.get("contact_name", ""),
             max_chars=120,
+            key=form_keys["name"],
         )
         phone = st.text_input(
             "Phone number",
-            value=existing.get("phone", ""),
             max_chars=20,
             placeholder="e.g. +91 98765 43210",
+            key=form_keys["phone"],
         )
         email = st.text_input(
             "E-mail ID",
-            value=existing.get("email", "") or "",
             max_chars=120,
             placeholder="optional",
+            key=form_keys["email"],
         )
         delivery_address = st.text_area(
             "Delivery address",
-            value=existing.get("delivery_address", ""),
             height=120,
             placeholder="Door no., street, locality, city, state, PIN code",
+            key=form_keys["addr"],
         )
 
-        submitted = st.form_submit_button("Save details", use_container_width=True)
+        btn_cols = st.columns(2)
+        with btn_cols[0]:
+            submitted = st.form_submit_button(
+                "Save details", use_container_width=True, type="primary"
+            )
+        with btn_cols[1]:
+            cleared = st.form_submit_button(
+                "Clear", use_container_width=True,
+                help="Empty all fields for this dealer",
+            )
+
+    if cleared:
+        for k in ("name", "phone", "email", "addr"):
+            st.session_state[form_keys[k]] = ""
+        st.rerun()
 
     if not submitted:
         return

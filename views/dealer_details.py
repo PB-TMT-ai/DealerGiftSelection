@@ -298,13 +298,15 @@ def _render_form(dealer: dict, user_name: str) -> None:
         st.error(str(e))
 
 
-def _render_captured_summary(retailers: list[dict]) -> bool:
-    """Show captured-details overview. Returns False if the table is missing."""
+def _render_captured_summary(retailers: list[dict]) -> None:
+    """Show captured-details overview. Renders the migration message inline if
+    the table is missing, but never short-circuits the rest of the page."""
     try:
         captured = db.get_all_dealer_details()
     except db.DealerDetailsTableMissing:
-        st.error(_MIGRATION_MSG)
-        return False
+        st.warning(_MIGRATION_MSG)
+        captured = {}
+
     total = len(retailers)
     done = sum(1 for r in retailers if r["sf_id"] in captured)
     pending = total - done
@@ -336,8 +338,6 @@ def _render_captured_summary(retailers: list[dict]) -> bool:
         rows.sort(key=lambda x: x["Dealer"])
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    return True
-
 
 def render_dealer_details() -> None:
     if not st.session_state.get("authenticated"):
@@ -351,8 +351,7 @@ def render_dealer_details() -> None:
         st.warning("No dealers found.")
         st.stop()
 
-    if not _render_captured_summary(retailers):
-        return
+    _render_captured_summary(retailers)
     st.divider()
 
     dealer = _render_filters(retailers)

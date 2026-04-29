@@ -18,6 +18,12 @@ import db
 _PHONE_RE = re.compile(r"^[0-9+\-\s()]{7,20}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+_MIGRATION_MSG = (
+    "The `dealer_details` table is missing in Supabase. "
+    "An admin must run `supabase/migrations/001_dealer_details.sql` "
+    "in the Supabase SQL editor before this tab can be used."
+)
+
 
 _FILTER_KEYS = (
     "dd_filter_zones",
@@ -139,7 +145,11 @@ def _render_form(dealer: dict, user_name: str) -> None:
         f"{dealer.get('state_name') or '—'} · {dealer.get('zone') or '—'}"
     )
 
-    existing = db.get_dealer_details(dealer["sf_id"]) or {}
+    try:
+        existing = db.get_dealer_details(dealer["sf_id"]) or {}
+    except db.DealerDetailsTableMissing:
+        st.error(_MIGRATION_MSG)
+        return
 
     form_keys = {
         "name": f"dd_name_{dealer['sf_id']}",
@@ -236,13 +246,19 @@ def _render_form(dealer: dict, user_name: str) -> None:
         )
         st.success("Details saved.")
         st.rerun()
+    except db.DealerDetailsTableMissing:
+        st.error(_MIGRATION_MSG)
     except ValueError as e:
         st.error(str(e))
 
 
-def _render_captured_summary(retailers: list[dict]) -> None:
-    """Show a quick overview of how many dealers already have details captured."""
-    captured = db.get_all_dealer_details()
+def _render_captured_summary(retailers: list[dict]) -> bool:
+    """Show captured-details overview. Returns False if the table is missing."""
+    try:
+        captured = db.get_all_dealer_details()
+    except db.DealerDetailsTableMissing:
+        st.error(_MIGRATION_MSG)
+        return False
     total = len(retailers)
     done = sum(1 for r in retailers if r["sf_id"] in captured)
     pending = total - done
@@ -274,6 +290,8 @@ def _render_captured_summary(retailers: list[dict]) -> None:
         rows.sort(key=lambda x: x["Dealer"])
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
+    return True
+
 
 def render_dealer_details() -> None:
     if not st.session_state.get("authenticated"):
@@ -287,7 +305,8 @@ def render_dealer_details() -> None:
         st.warning("No dealers found.")
         st.stop()
 
-    _render_captured_summary(retailers)
+    if not _render_captured_summary(retailers):
+        return
     st.divider()
 
     dealer = _render_filters(retailers)

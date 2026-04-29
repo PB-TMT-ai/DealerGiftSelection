@@ -575,19 +575,34 @@ def _demo_replace_selections(
 # Dealer Delivery Details
 # ---------------------------------------------------------------------------
 
+class DealerDetailsTableMissing(RuntimeError):
+    """Raised when the dealer_details table has not been created in Supabase."""
+
+
+def _is_missing_table_error(exc: Exception) -> bool:
+    """Detect Supabase/PostgREST 'table not found' errors (PGRST205)."""
+    msg = str(exc)
+    return "PGRST205" in msg or "dealer_details" in msg and "schema cache" in msg
+
+
 def get_dealer_details(retailer_sf_id: str) -> dict | None:
     """Return the dealer delivery details for a retailer, or None."""
     if _DEMO_MODE:
         return dict(_demo_dealer_details[retailer_sf_id]) if retailer_sf_id in _demo_dealer_details else None
 
-    resp = (
-        get_client()
-        .table("dealer_details")
-        .select("*")
-        .eq("retailer_sf_id", retailer_sf_id)
-        .limit(1)
-        .execute()
-    )
+    try:
+        resp = (
+            get_client()
+            .table("dealer_details")
+            .select("*")
+            .eq("retailer_sf_id", retailer_sf_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_table_error(exc):
+            raise DealerDetailsTableMissing() from exc
+        raise
     return resp.data[0] if resp.data else None
 
 
@@ -596,7 +611,12 @@ def get_all_dealer_details() -> dict[str, dict]:
     if _DEMO_MODE:
         return {k: dict(v) for k, v in _demo_dealer_details.items()}
 
-    resp = get_client().table("dealer_details").select("*").execute()
+    try:
+        resp = get_client().table("dealer_details").select("*").execute()
+    except Exception as exc:
+        if _is_missing_table_error(exc):
+            raise DealerDetailsTableMissing() from exc
+        raise
     return {row["retailer_sf_id"]: row for row in (resp.data or [])}
 
 
@@ -627,12 +647,17 @@ def upsert_dealer_details(
         _demo_dealer_details[retailer_sf_id] = record
         return record
 
-    resp = (
-        get_client()
-        .table("dealer_details")
-        .upsert(payload, on_conflict="retailer_sf_id")
-        .execute()
-    )
+    try:
+        resp = (
+            get_client()
+            .table("dealer_details")
+            .upsert(payload, on_conflict="retailer_sf_id")
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_table_error(exc):
+            raise DealerDetailsTableMissing() from exc
+        raise
     return resp.data[0] if resp.data else payload
 
 

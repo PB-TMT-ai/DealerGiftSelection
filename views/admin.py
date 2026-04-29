@@ -11,6 +11,7 @@ import db
 from utils.constants import VOUCHER_POINTS_TO_INR
 from utils.excel_export import (
     build_consolidated_rows,
+    build_dealer_details_rows,
     build_gift_summary,
     build_state_summary,
     build_zone_summary,
@@ -75,6 +76,16 @@ def render_admin() -> None:
     state_df = build_state_summary(retailers)
     gift_df = build_gift_summary(retailers)
 
+    try:
+        dealer_details_map = db.get_all_dealer_details()
+    except db.DealerDetailsTableMissing:
+        dealer_details_map = {}
+        st.warning(
+            "Dealer Details table is not yet set up — the export's Dealer "
+            "Details sheet will list all dealers with blank contact fields."
+        )
+    dealer_details_df = build_dealer_details_rows(retailers, dealer_details_map)
+
     with st.expander("Consolidated Retailer Data", expanded=True):
         st.dataframe(df_consolidated, use_container_width=True, hide_index=True)
 
@@ -96,6 +107,14 @@ def render_admin() -> None:
         else:
             st.caption("No gift selection data yet.")
 
+    with st.expander("Dealer Delivery Details", expanded=False):
+        if not dealer_details_df.empty:
+            st.dataframe(
+                dealer_details_df, use_container_width=True, hide_index=True
+            )
+        else:
+            st.caption("No dealer delivery details captured yet.")
+
     st.divider()
     st.markdown("### Export")
 
@@ -108,6 +127,7 @@ def render_admin() -> None:
             zone_summary=zone_df,
             state_summary=state_df,
             gift_summary=gift_df,
+            dealer_details=dealer_details_df,
         )
         st.download_button(
             label=f"Download {filename}",

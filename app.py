@@ -19,6 +19,7 @@ st.set_page_config(
 
 import auth  # noqa: E402
 from views.admin import render_admin  # noqa: E402
+from views.dealer_details import render_dealer_details  # noqa: E402
 from views.gift_selection import render_gift_selection  # noqa: E402
 
 
@@ -79,43 +80,48 @@ def show_login() -> None:
                 st.rerun()
 
 
+_VIEW_TITLES = {
+    "gift_selection": "Gift Selection",
+    "dealer_details": "Dealer Details",
+    "admin": "Admin Dashboard",
+}
+
+
 def render_top_bar() -> None:
-    """Inline top bar: title, user, view switch (admin only), logout."""
+    """Inline top bar: title, user, nav tabs, logout."""
     is_admin = st.session_state["role"] == "admin"
     view = st.session_state.get("view", "gift_selection")
+    title = _VIEW_TITLES.get(view, "Gift Selection")
 
-    title = "Admin Dashboard" if view == "admin" else "Gift Selection"
-
-    if is_admin:
-        cols = st.columns([3, 2, 2, 1])
-    else:
-        cols = st.columns([5, 2, 1])
-
-    with cols[0]:
+    header_cols = st.columns([5, 2, 1])
+    with header_cols[0]:
         st.markdown(f"### {title}")
+    with header_cols[1]:
+        role_label = "Admin" if is_admin else "Sales/Territory Manager"
+        st.caption(f"**{st.session_state['user_name']}** · {role_label}")
+    with header_cols[2]:
+        if st.button("Logout", use_container_width=True, key="logout_btn"):
+            _logout()
 
+    nav_targets = [
+        ("gift_selection", "Gift Selection"),
+        ("dealer_details", "Dealer Details"),
+    ]
     if is_admin:
-        with cols[1]:
-            role_label = "Admin"
-            st.caption(f"**{st.session_state['user_name']}** · {role_label}")
-        with cols[2]:
-            if view == "admin":
-                if st.button("← Gift Selection", use_container_width=True, key="nav_gift"):
-                    st.session_state["view"] = "gift_selection"
-                    st.rerun()
-            else:
-                if st.button("Admin Dashboard →", use_container_width=True, key="nav_admin"):
-                    st.session_state["view"] = "admin"
-                    st.rerun()
-        with cols[3]:
-            if st.button("Logout", use_container_width=True, key="logout_btn"):
-                _logout()
-    else:
-        with cols[1]:
-            st.caption(f"**{st.session_state['user_name']}** · Sales/Territory Manager")
-        with cols[2]:
-            if st.button("Logout", use_container_width=True, key="logout_btn"):
-                _logout()
+        nav_targets.append(("admin", "Admin Dashboard"))
+
+    nav_cols = st.columns(len(nav_targets))
+    for col, (target, label) in zip(nav_cols, nav_targets):
+        with col:
+            is_current = view == target
+            if st.button(
+                ("● " + label) if is_current else label,
+                use_container_width=True,
+                key=f"nav_{target}",
+                disabled=is_current,
+            ):
+                st.session_state["view"] = target
+                st.rerun()
 
     st.divider()
 
@@ -138,6 +144,8 @@ def main() -> None:
     view = st.session_state.get("view", "gift_selection")
     if view == "admin" and st.session_state["role"] == "admin":
         render_admin()
+    elif view == "dealer_details":
+        render_dealer_details()
     else:
         render_gift_selection()
 

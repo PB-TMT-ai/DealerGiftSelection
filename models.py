@@ -50,6 +50,17 @@ class SelectionInput(BaseModel):
     quantity: int = Field(ge=1, default=1)
 
 
+class DealerDetails(BaseModel):
+    """Delivery contact details captured per dealer (retailer)."""
+    retailer_sf_id: str
+    contact_name: str
+    phone: str
+    email: Optional[str] = None
+    delivery_address: str
+    updated_by: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
 class User(BaseModel):
     id: int
     name: str

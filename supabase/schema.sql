@@ -54,6 +54,17 @@ CREATE TABLE IF NOT EXISTS app_users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Delivery contact details per dealer (one row per retailer)
+CREATE TABLE IF NOT EXISTS dealer_details (
+  retailer_sf_id TEXT PRIMARY KEY REFERENCES retailers(sf_id) ON DELETE CASCADE,
+  contact_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  delivery_address TEXT NOT NULL,
+  updated_by TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ======================== INDEXES ========================
 
 CREATE INDEX IF NOT EXISTS idx_retailers_distributor ON retailers(distributor_name);

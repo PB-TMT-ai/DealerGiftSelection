@@ -67,6 +67,9 @@ _DEMO_USERS: list[dict] = [
 _demo_selections: list[dict] = []
 _demo_sel_id_counter: int = 0
 
+# Mutable in-memory store for demo dealer delivery details (one per sf_id)
+_demo_dealer_details: dict[str, dict] = {}
+
 
 _SLAB_THRESHOLDS: list[tuple[int, str]] = [
     (7500, "E"),
@@ -566,6 +569,71 @@ def _demo_replace_selections(
         })
 
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Dealer Delivery Details
+# ---------------------------------------------------------------------------
+
+def get_dealer_details(retailer_sf_id: str) -> dict | None:
+    """Return the dealer delivery details for a retailer, or None."""
+    if _DEMO_MODE:
+        return dict(_demo_dealer_details[retailer_sf_id]) if retailer_sf_id in _demo_dealer_details else None
+
+    resp = (
+        get_client()
+        .table("dealer_details")
+        .select("*")
+        .eq("retailer_sf_id", retailer_sf_id)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def get_all_dealer_details() -> dict[str, dict]:
+    """Return a dict mapping retailer_sf_id -> details row."""
+    if _DEMO_MODE:
+        return {k: dict(v) for k, v in _demo_dealer_details.items()}
+
+    resp = get_client().table("dealer_details").select("*").execute()
+    return {row["retailer_sf_id"]: row for row in (resp.data or [])}
+
+
+def upsert_dealer_details(
+    retailer_sf_id: str,
+    contact_name: str,
+    phone: str,
+    email: str | None,
+    delivery_address: str,
+    user_name: str,
+) -> dict:
+    """Insert or update delivery details for a dealer."""
+    if not get_retailer(retailer_sf_id):
+        raise ValueError(f'Retailer "{retailer_sf_id}" not found')
+
+    payload = {
+        "retailer_sf_id": retailer_sf_id,
+        "contact_name": contact_name,
+        "phone": phone,
+        "email": email,
+        "delivery_address": delivery_address,
+        "updated_by": user_name,
+    }
+
+    if _DEMO_MODE:
+        from datetime import datetime, timezone
+        record = {**payload, "updated_at": datetime.now(timezone.utc).isoformat()}
+        _demo_dealer_details[retailer_sf_id] = record
+        return record
+
+    resp = (
+        get_client()
+        .table("dealer_details")
+        .upsert(payload, on_conflict="retailer_sf_id")
+        .execute()
+    )
+    return resp.data[0] if resp.data else payload
 
 
 # ---------------------------------------------------------------------------

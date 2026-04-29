@@ -18,6 +18,7 @@ from utils.constants import VOUCHER_POINTS_TO_INR
 
 _PHONE_RE = re.compile(r"^[0-9+\-\s()]{7,20}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_DEFAULT_PHONE_PREFIX = "+91 "
 
 _MIGRATION_MSG = (
     "The `dealer_details` table is missing in Supabase. "
@@ -207,7 +208,9 @@ def _render_form(dealer: dict, user_name: str) -> None:
 
     if not st.session_state.get(form_keys["loaded"]):
         st.session_state[form_keys["name"]] = existing.get("contact_name", "")
-        st.session_state[form_keys["phone"]] = existing.get("phone", "")
+        st.session_state[form_keys["phone"]] = (
+            existing.get("phone") or _DEFAULT_PHONE_PREFIX
+        )
         st.session_state[form_keys["email"]] = existing.get("email", "") or ""
         st.session_state[form_keys["addr"]] = existing.get("delivery_address", "")
         st.session_state[form_keys["loaded"]] = True
@@ -230,7 +233,7 @@ def _render_form(dealer: dict, user_name: str) -> None:
         email = st.text_input(
             "E-mail ID",
             max_chars=120,
-            placeholder="optional",
+            placeholder="name@example.com",
             key=form_keys["email"],
         )
         delivery_address = st.text_area(
@@ -252,8 +255,10 @@ def _render_form(dealer: dict, user_name: str) -> None:
             )
 
     if cleared:
-        for k in ("name", "phone", "email", "addr"):
-            st.session_state[form_keys[k]] = ""
+        st.session_state[form_keys["name"]] = ""
+        st.session_state[form_keys["phone"]] = _DEFAULT_PHONE_PREFIX
+        st.session_state[form_keys["email"]] = ""
+        st.session_state[form_keys["addr"]] = ""
         st.rerun()
 
     if not submitted:
@@ -267,11 +272,13 @@ def _render_form(dealer: dict, user_name: str) -> None:
     errors: list[str] = []
     if not contact_name:
         errors.append("Name of the person is required.")
-    if not phone:
+    if not phone or phone == _DEFAULT_PHONE_PREFIX.strip():
         errors.append("Phone number is required.")
     elif not _PHONE_RE.match(phone):
         errors.append("Phone number looks invalid.")
-    if email and not _EMAIL_RE.match(email):
+    if not email:
+        errors.append("E-mail ID is required.")
+    elif not _EMAIL_RE.match(email):
         errors.append("E-mail ID looks invalid.")
     if not delivery_address:
         errors.append("Delivery address is required.")
@@ -286,7 +293,7 @@ def _render_form(dealer: dict, user_name: str) -> None:
             retailer_sf_id=dealer["sf_id"],
             contact_name=contact_name,
             phone=phone,
-            email=email or None,
+            email=email,
             delivery_address=delivery_address,
             user_name=user_name,
         )

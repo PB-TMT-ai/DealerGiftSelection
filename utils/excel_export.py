@@ -17,13 +17,15 @@ def generate_export(
     zone_summary: pd.DataFrame,
     state_summary: pd.DataFrame,
     gift_summary: pd.DataFrame,
+    dealer_details: pd.DataFrame | None = None,
 ) -> bytes:
     """
-    Generate a styled Excel workbook with 4 sheets:
+    Generate a styled Excel workbook with up to 5 sheets:
       1. Consolidated — one row per retailer with gift details
       2. Zone Summary
       3. State Summary
       4. Gift Summary
+      5. Dealer Details — delivery contact info per dealer (optional)
 
     Returns the workbook as bytes for st.download_button.
     """
@@ -42,6 +44,12 @@ def generate_export(
 
         # Sheet 4: Gift Summary
         gift_summary.to_excel(writer, sheet_name="Gift Summary", index=False)
+
+        # Sheet 5: Dealer Details (delivery contact info)
+        if dealer_details is not None:
+            dealer_details.to_excel(
+                writer, sheet_name="Dealer Details", index=False
+            )
 
         # Style all sheets: bold header, frozen first row, auto-width
         wb = writer.book
@@ -115,6 +123,36 @@ def build_consolidated_rows(retailers: list[dict]) -> list[dict]:
         })
 
     return rows
+
+
+def build_dealer_details_rows(
+    retailers: list[dict],
+    dealer_details: dict[str, dict],
+) -> pd.DataFrame:
+    """One row per retailer with their delivery contact info (blank if missing).
+
+    `dealer_details` is a dict keyed by retailer sf_id (as returned by
+    `db.get_all_dealer_details`).
+    """
+    rows = []
+    for r in retailers:
+        d = dealer_details.get(r["sf_id"]) or {}
+        rows.append({
+            "SF ID": r["sf_id"],
+            "Dealer": r.get("retailer_name", ""),
+            "Distributor": r.get("distributor_name", ""),
+            "State": r.get("state_name", ""),
+            "Zone": r.get("zone", ""),
+            "Contact Person": d.get("contact_name", ""),
+            "Phone": d.get("phone", ""),
+            "Email": d.get("email", "") or "",
+            "Delivery Address": d.get("delivery_address", ""),
+            "Updated By": d.get("updated_by", "") or "",
+            "Updated At": d.get("updated_at", "") or "",
+        })
+
+    rows.sort(key=lambda x: (x["Dealer"] or "").lower())
+    return pd.DataFrame(rows)
 
 
 def build_zone_summary(retailers: list[dict]) -> pd.DataFrame:

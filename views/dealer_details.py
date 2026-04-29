@@ -13,10 +13,17 @@ import pandas as pd
 import streamlit as st
 
 import db
+from utils.constants import VOUCHER_POINTS_TO_INR
 
 
 _PHONE_RE = re.compile(r"^[0-9+\-\s()]{7,20}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+_MIGRATION_MSG = (
+    "The `dealer_details` table is missing in Supabase. "
+    "An admin must run `supabase/migrations/001_dealer_details.sql` "
+    "in the Supabase SQL editor before this tab can be used."
+)
 
 
 _FILTER_KEYS = (
@@ -132,14 +139,63 @@ def _render_filters(retailers: list[dict]) -> dict | None:
     return matching_dealers[selected_idx]
 
 
+def _render_dealer_summary(dealer: dict) -> None:
+    """Show points accumulated/utilized/balance and the dealer's gift selections."""
+    sf_id = dealer["sf_id"]
+    earned = int(dealer.get("earned_points") or 0)
+
+    selections = db.get_selections_for_retailer(sf_id)
+    used = sum(
+        int(s.get("points_used") or 0) * int(s.get("quantity") or 1)
+        for s in selections
+    )
+    balance = earned - used
+
+    st.subheader(f"2. {dealer.get('retailer_name', '')} — points & gifts")
+
+    cols = st.columns(3)
+    cols[0].metric("Points accumulated", f"{earned:,}")
+    cols[1].metric("Points utilized", f"{used:,}")
+    cols[2].metric("Balance", f"{balance:,}")
+
+    st.markdown("**Gift selections**")
+    if not selections:
+        st.info("No gifts selected yet for this dealer.")
+        return
+
+    rows = []
+    for sel in selections:
+        gift = sel.get("gifts_catalog") or {}
+        qty = int(sel.get("quantity") or 1)
+        pts = int(sel.get("points_used") or 0)
+        if gift.get("is_flexible"):
+            name = f"{gift.get('name', 'Gift')} (₹{pts * VOUCHER_POINTS_TO_INR:,})"
+        else:
+            name = gift.get("name", "Gift")
+        rows.append({
+            "Gift": name,
+            "Quantity": qty,
+            "Points each": pts,
+            "Points total": pts * qty,
+        })
+
+    st.dataframe(
+        pd.DataFrame(rows), use_container_width=True, hide_index=True
+    )
+
+
 def _render_form(dealer: dict, user_name: str) -> None:
-    st.subheader(f"2. Delivery details for {dealer.get('retailer_name', '')}")
+    st.subheader(f"3. Delivery details for {dealer.get('retailer_name', '')}")
     st.caption(
         f"SF ID: {dealer['sf_id']} · {dealer.get('distributor_name') or '—'} · "
         f"{dealer.get('state_name') or '—'} · {dealer.get('zone') or '—'}"
     )
 
-    existing = db.get_dealer_details(dealer["sf_id"]) or {}
+    try:
+        existing = db.get_dealer_details(dealer["sf_id"]) or {}
+    except db.DealerDetailsTableMissing:
+        st.error(_MIGRATION_MSG)
+        return
 
     form_keys = {
         "name": f"dd_name_{dealer['sf_id']}",
@@ -236,13 +292,19 @@ def _render_form(dealer: dict, user_name: str) -> None:
         )
         st.success("Details saved.")
         st.rerun()
+    except db.DealerDetailsTableMissing:
+        st.error(_MIGRATION_MSG)
     except ValueError as e:
         st.error(str(e))
 
 
-def _render_captured_summary(retailers: list[dict]) -> None:
-    """Show a quick overview of how many dealers already have details captured."""
-    captured = db.get_all_dealer_details()
+def _render_captured_summary(retailers: list[dict]) -> bool:
+    """Show captured-details overview. Returns False if the table is missing."""
+    try:
+        captured = db.get_all_dealer_details()
+    except db.DealerDetailsTableMissing:
+        st.error(_MIGRATION_MSG)
+        return False
     total = len(retailers)
     done = sum(1 for r in retailers if r["sf_id"] in captured)
     pending = total - done
@@ -274,6 +336,8 @@ def _render_captured_summary(retailers: list[dict]) -> None:
         rows.sort(key=lambda x: x["Dealer"])
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
+    return True
+
 
 def render_dealer_details() -> None:
     if not st.session_state.get("authenticated"):
@@ -287,12 +351,16 @@ def render_dealer_details() -> None:
         st.warning("No dealers found.")
         st.stop()
 
-    _render_captured_summary(retailers)
+    if not _render_captured_summary(retailers):
+        return
     st.divider()
 
     dealer = _render_filters(retailers)
     if dealer is None:
         return
+
+    st.divider()
+    _render_dealer_summary(dealer)
 
     st.divider()
     _render_form(dealer, st.session_state.get("user_name", "Unknown"))
